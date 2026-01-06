@@ -1,0 +1,60 @@
+# PlatformIO
+.pio/
+.vscode/
+.pioenvs/
+.piolibdeps/
+lib/readme.txt
+
+# Build artifacts
+*.o
+*.elf
+*.hex
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Logs
+*.log
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.Trash/
+
+# Backup directories
+*bu*/
+*BU*/
+*backup*/
+*(legacy)*/
+
+# Test files (keep in repo but ignore logs)
+motor_test_*.log
+optimize_*.log
+
+# Node modules (if any)
+node_modules/
+
+# Compiled / optimized files
+dist/
+build/
+*.com
+*.class
+*.dll
+*.exe
+*.out
+*.app

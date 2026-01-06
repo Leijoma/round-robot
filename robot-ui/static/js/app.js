@@ -1,0 +1,345 @@
+/**
+ * Robot Control UI - Main Application
+ * WebSocket communication and motor control logic
+ */
+
+// Global variables
+let socket = null;
+let currentVelocity = 0.3; // m/s
+let isConnected = false;
+
+// Motor command state
+let activeDirection = null;
+let pressedKeys = new Set(); // Track which keys are currently held down
+
+// Odometry streaming state
+let streamingEnabled = true;
+
+// Initialize application
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Robot Control UI initializing...');
+    initializeWebSocket();
+    initializeControls();
+    initializeKeyboardControls();
+});
+
+/**
+ * WebSocket Connection
+ */
+function initializeWebSocket() {
+    // Connect to Flask-SocketIO server
+    socket = io();
+
+    socket.on('connect', () => {
+        console.log('✓ Connected to server');
+        isConnected = true;
+        updateConnectionStatus(true, 'Connecting to ESP32...');
+    });
+
+    socket.on('disconnect', () => {
+        console.log('✗ Disconnected from server');
+        isConnected = false;
+        updateConnectionStatus(false, 'Disconnected');
+        stopMotor();
+    });
+
+    socket.on('connection_status', (data) => {
+        console.log('Connection status:', data);
+        updateConnectionStatus(data.esp32, data.esp32 ? 'Connected' : 'ESP32 Offline');
+    });
+
+    socket.on('odom_update', (data) => {
+        updateOdometryDisplay(data);
+    });
+
+    socket.on('error', (data) => {
+        console.error('Server error:', data.message);
+        alert(`Error: ${data.message}`);
+    });
+
+    socket.on('lidar_scan', (data) => {
+        if (typeof handleLidarScan === 'function') {
+            handleLidarScan(data);
+        }
+    });
+}
+
+/**
+ * Initialize UI Controls
+ */
+function initializeControls() {
+    // Direction buttons
+    const directionButtons = document.querySelectorAll('.btn-direction');
+    directionButtons.forEach(btn => {
+        btn.addEventListener('mousedown', () => handleDirectionPress(btn.dataset.direction));
+        btn.addEventListener('mouseup', () => handleDirectionRelease());
+        btn.addEventListener('mouseleave', () => handleDirectionRelease());
+
+        // Touch events for mobile
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleDirectionPress(btn.dataset.direction);
+        });
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            handleDirectionRelease();
+        });
+    });
+
+    // Stop button
+    const stopButton = document.getElementById('btn-stop');
+    stopButton.addEventListener('click', () => {
+        console.log('Stop button clicked');
+        stopMotor();
+    });
+
+    // Velocity slider
+    const velocitySlider = document.getElementById('velocity-slider');
+    const velocityValue = document.getElementById('velocity-value');
+
+    velocitySlider.addEventListener('input', (e) => {
+        currentVelocity = parseFloat(e.target.value);
+        velocityValue.textContent = `${currentVelocity.toFixed(2)} m/s`;
+    });
+
+    // Streaming toggle button
+    const streamButton = document.getElementById('btn-toggle-stream');
+    streamButton.addEventListener('click', () => {
+        streamingEnabled = !streamingEnabled;
+        toggleOdometryStreaming(streamingEnabled);
+        streamButton.textContent = `Streaming: ${streamingEnabled ? 'ON' : 'OFF'}`;
+        streamButton.classList.toggle('stream-off', !streamingEnabled);
+        console.log(`Odometry streaming: ${streamingEnabled ? 'ENABLED' : 'DISABLED'}`);
+    });
+}
+
+/**
+ * Keyboard Controls
+ */
+function initializeKeyboardControls() {
+    document.addEventListener('keydown', (e) => {
+        // Prevent keyboard control if user is typing in an input
+        if (e.target.tagName === 'INPUT') return;
+
+        // Handle SPACE key (stop)
+        if (e.key === ' ') {
+            e.preventDefault();
+            stopMotor();
+            return;
+        }
+
+        // Map keys to directions
+        let direction = null;
+        const key = e.key.toLowerCase();
+        switch(key) {
+            case 'w':
+            case 'arrowup':
+                direction = 'forward';
+                break;
+            case 's':
+            case 'arrowdown':
+                direction = 'backward';
+                break;
+            case 'a':
+            case 'arrowleft':
+                direction = 'left';
+                break;
+            case 'd':
+            case 'arrowright':
+                direction = 'right';
+                break;
+        }
+
+        // Only trigger if this is a NEW key press (not auto-repeat)
+        if (direction && !pressedKeys.has(key)) {
+            e.preventDefault();
+            pressedKeys.add(key);
+            handleDirectionPress(direction);
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+
+        const key = e.key.toLowerCase();
+        if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+            e.preventDefault();
+            pressedKeys.delete(key);
+            handleDirectionRelease();
+        }
+    });
+}
+
+/**
+ * Motor Control Functions
+ */
+function handleDirectionPress(direction) {
+    console.log(`Direction pressed: ${direction}`);
+    activeDirection = direction;
+
+    // Visual feedback
+    highlightDirectionButton(direction);
+
+    // Send motor command ONCE - no interval
+    sendMotorCommand(direction);
+}
+
+function handleDirectionRelease() {
+    if (!activeDirection) return;
+
+    console.log(`Direction released: ${activeDirection}`);
+
+    // Remove visual feedback only - motors continue at set velocity
+    removeDirectionHighlight();
+
+    // Clear active direction
+    activeDirection = null;
+}
+
+function sendMotorCommand(direction) {
+    if (!socket || !isConnected) {
+        console.warn('Not connected to server');
+        return;
+    }
+
+    let vel_left = 0;
+    let vel_right = 0;
+
+    // Calculate wheel velocities based on direction
+    switch(direction) {
+        case 'forward':
+            vel_left = currentVelocity;
+            vel_right = currentVelocity;
+            break;
+        case 'backward':
+            vel_left = -currentVelocity;
+            vel_right = -currentVelocity;
+            break;
+        case 'left':
+            vel_left = -currentVelocity * 0.5;
+            vel_right = currentVelocity * 0.5;
+            break;
+        case 'right':
+            vel_left = currentVelocity * 0.5;
+            vel_right = -currentVelocity * 0.5;
+            break;
+    }
+
+    // Send command via WebSocket
+    socket.emit('motor_command', {
+        type: 'velocity',
+        vel_left: vel_left,
+        vel_right: vel_right
+    });
+
+    console.log(`Motor command: L=${vel_left.toFixed(2)} R=${vel_right.toFixed(2)} m/s`);
+}
+
+function stopMotor() {
+    if (!socket || !isConnected) {
+        console.warn('stopMotor: Not connected to server');
+        return;
+    }
+
+    console.log('🛑 Motor STOP called');
+
+    // Clear state
+    activeDirection = null;
+    pressedKeys.clear();
+
+    // Remove visual feedback
+    removeDirectionHighlight();
+
+    // Send STOP command
+    console.log('  → Sending STOP command...');
+    socket.emit('motor_command', {
+        type: 'stop'
+    });
+
+    console.log('✓ Motor STOP command sent');
+}
+
+/**
+ * Odometry Streaming Control
+ */
+function toggleOdometryStreaming(enable) {
+    if (!socket || !isConnected) {
+        console.warn('toggleOdometryStreaming: Not connected to server');
+        return;
+    }
+
+    console.log(`${enable ? 'Enabling' : 'Disabling'} odometry streaming...`);
+    socket.emit('enable_stream', {
+        enable: enable,
+        interval_ms: 200  // 5 Hz
+    });
+    console.log(`✓ Streaming ${enable ? 'enabled' : 'disabled'} @ 200ms`);
+}
+
+/**
+ * UI Update Functions
+ */
+function updateConnectionStatus(connected, message) {
+    const statusElement = document.getElementById('esp32-status');
+
+    if (connected) {
+        statusElement.className = 'status-online';
+        statusElement.textContent = `ESP32: ${message}`;
+    } else {
+        statusElement.className = 'status-offline';
+        statusElement.textContent = `ESP32: ${message}`;
+    }
+}
+
+function updateOdometryDisplay(data) {
+    // Update velocity (m/s)
+    document.getElementById('vel-left').textContent = `${data.vel_left.toFixed(2)} m/s`;
+    document.getElementById('vel-right').textContent = `${data.vel_right.toFixed(2)} m/s`;
+
+    // Calculate and update velocity (ticks/s)
+    // Assuming data contains velocityTicksLeft and velocityTicksRight from server
+    // If not, we can calculate from vel_left/right and wheel radius
+    const velLeftTicks = data.velocity_ticks_left || Math.round(data.vel_left * 360 / (0.082 * Math.PI));
+    const velRightTicks = data.velocity_ticks_right || Math.round(data.vel_right * 360 / (0.082 * Math.PI));
+    document.getElementById('vel-left-ticks').textContent = velLeftTicks;
+    document.getElementById('vel-right-ticks').textContent = velRightTicks;
+
+    // Update encoders
+    document.getElementById('enc-left').textContent = data.encoder_left;
+    document.getElementById('enc-right').textContent = data.encoder_right;
+
+    // Update PWM
+    document.getElementById('pwm-left').textContent = data.pwm_left;
+    document.getElementById('pwm-right').textContent = data.pwm_right;
+}
+
+function highlightDirectionButton(direction) {
+    // Remove previous highlights
+    removeDirectionHighlight();
+
+    // Add highlight to active button
+    const button = document.querySelector(`.btn-direction[data-direction="${direction}"]`);
+    if (button) {
+        button.classList.add('active');
+    }
+}
+
+function removeDirectionHighlight() {
+    const buttons = document.querySelectorAll('.btn-direction');
+    buttons.forEach(btn => btn.classList.remove('active'));
+}
+
+/**
+ * Utility Functions
+ */
+function log(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`[${timestamp}] ${type.toUpperCase()}: ${message}`);
+}
+
+// Prevent accidental page navigation
+window.addEventListener('beforeunload', (e) => {
+    if (activeDirection) {
+        stopMotor();
+    }
+});

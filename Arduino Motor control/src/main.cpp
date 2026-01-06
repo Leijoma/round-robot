@@ -1,0 +1,597 @@
+#include <Arduino.h>
+#include <EEPROM.h>
+#include <SoftwareSerial.h>
+#include "RobotLink.h"
+#include "RobotLinkMessages.h"
+
+// ============================================================
+// Hardware Pin Definitions (Monster Moto Shield + Encoders)
+// ============================================================
+// Left Motor (M1)
+const uint8_t PIN_M1_INA = 7;
+const uint8_t PIN_M1_INB = 8;
+const uint8_t PIN_M1_PWM = 5;
+
+// Right Motor (M2)
+const uint8_t PIN_M2_INA = 4;
+const uint8_t PIN_M2_INB = 9;
+const uint8_t PIN_M2_PWM = 6;
+
+// Left Encoder
+const uint8_t PIN_ENC_L_A = 2;  // INT0
+const uint8_t PIN_ENC_L_B = 10;
+
+// Right Encoder
+const uint8_t PIN_ENC_R_A = 3;  // INT1
+const uint8_t PIN_ENC_R_B = 11;
+
+// SoftwareSerial pins for RobotLink protocol
+const uint8_t PIN_SOFT_RX = A0;  // Arduino RX <- ESP32 GPIO27 TX
+const uint8_t PIN_SOFT_TX = A1;  // Arduino TX -> ESP32 GPIO26 RX
+
+// ============================================================
+// Robot Configuration
+// ============================================================
+const float WHEEL_DIAMETER = 0.082f;   // meters
+const float WHEELBASE = 0.24f;         // meters
+const float TICKS_PER_REV = 360.0f;    // encoder ticks per revolution
+const float METERS_PER_TICK = (PI * WHEEL_DIAMETER) / TICKS_PER_REV;
+
+// ============================================================
+// PID Controller Class with Deadband Compensation
+// ============================================================
+class PIDController {
+public:
+  float Kp, Ki, Kd;
+  float deadbandForward;   // PWM offset for forward motion
+  float deadbandReverse;   // PWM offset for reverse motion
+
+  PIDController() : Kp(10.0f), Ki(5.0f), Kd(0.1f),
+                    deadbandForward(30.0f), deadbandReverse(30.0f),
+                    _integral(0), _prevError(0), _prevVel(0) {}
+
+  // Update PID controller
+  // vel: current velocity (m/s)
+  // target: target velocity (m/s)
+  // dt: time delta (seconds)
+  // Returns: PWM output (-255 to +255)
+  float update(float vel, float target, float dt) {
+    if (dt <= 0) return 0;
+
+    // Error calculation
+    float error = target - vel;
+
+    // Proportional term
+    float pTerm = Kp * error;
+
+    // Integral term with anti-windup
+    _integral += error * dt;
+    const float MAX_INTEGRAL = 100.0f;
+    if (_integral > MAX_INTEGRAL) _integral = MAX_INTEGRAL;
+    if (_integral < -MAX_INTEGRAL) _integral = -MAX_INTEGRAL;
+    float iTerm = Ki * _integral;
+
+    // Derivative term (on measurement to avoid derivative kick)
+    float derivative = (vel - _prevVel) / dt;
+    float dTerm = -Kd * derivative;
+
+    _prevVel = vel;
+    _prevError = error;
+
+    // Calculate raw PWM
+    float pwm = pTerm + iTerm + dTerm;
+
+    // Apply deadband compensation
+    if (target > 0.001f) {
+      // Moving forward
+      pwm += deadbandForward;
+    } else if (target < -0.001f) {
+      // Moving backward
+      pwm -= deadbandReverse;
+    } else {
+      // Target is zero - stop and reset integral
+      _integral = 0;
+      return 0;
+    }
+
+    // Clamp to PWM range
+    if (pwm > 255.0f) pwm = 255.0f;
+    if (pwm < -255.0f) pwm = -255.0f;
+
+    return pwm;
+  }
+
+  void reset() {
+    _integral = 0;
+    _prevError = 0;
+    _prevVel = 0;
+  }
+
+private:
+  float _integral;
+  float _prevError;
+  float _prevVel;
+};
+
+// ============================================================
+// Global Variables
+// ============================================================
+// Encoder counts (volatile for ISR access)
+volatile int32_t encoderLeftCount = 0;
+volatile int32_t encoderRightCount = 0;
+
+// PID Controllers
+PIDController pidLeft;
+PIDController pidRight;
+
+// Velocity targets (m/s)
+float targetVelLeft = 0;
+float targetVelRight = 0;
+
+// Current velocities (m/s)
+float currentVelLeft = 0;
+float currentVelRight = 0;
+
+// PWM outputs
+int16_t pwmLeft = 0;
+int16_t pwmRight = 0;
+
+// Odometry pose
+int32_t pose_x_mm = 0;
+int32_t pose_y_mm = 0;
+int16_t pose_th_mrad = 0;
+
+// Previous encoder values for delta calculation
+int32_t prevEncoderLeft = 0;
+int32_t prevEncoderRight = 0;
+
+// Timing
+unsigned long lastControlUpdate = 0;
+unsigned long lastOdomSend = 0;
+const unsigned long CONTROL_INTERVAL = 50;  // 50ms = 20Hz
+const unsigned long ODOM_INTERVAL = 50;     // 50ms = 20Hz
+
+// SoftwareSerial for ESP32 communication
+SoftwareSerial softSerial(PIN_SOFT_RX, PIN_SOFT_TX);
+
+// RobotLink protocol
+RobotLink::Link* robotLink = nullptr;
+
+// Configuration
+bool streamEnabled = false;
+uint16_t streamInterval = 50;  // ms
+
+// ============================================================
+// Encoder Interrupt Service Routines
+// ============================================================
+void isrEncoderLeft() {
+  bool b = digitalRead(PIN_ENC_L_B);
+  if (b) {
+    encoderLeftCount++;
+  } else {
+    encoderLeftCount--;
+  }
+}
+
+void isrEncoderRight() {
+  bool b = digitalRead(PIN_ENC_R_B);
+  if (b) {
+    encoderRightCount++;
+  } else {
+    encoderRightCount--;
+  }
+}
+
+// ============================================================
+// Motor Control Functions
+// ============================================================
+void setMotor(uint8_t pinINA, uint8_t pinINB, uint8_t pinPWM, int16_t pwm) {
+  if (pwm > 0) {
+    // Forward
+    digitalWrite(pinINA, HIGH);
+    digitalWrite(pinINB, LOW);
+    analogWrite(pinPWM, constrain(pwm, 0, 255));
+  } else if (pwm < 0) {
+    // Backward
+    digitalWrite(pinINA, LOW);
+    digitalWrite(pinINB, HIGH);
+    analogWrite(pinPWM, constrain(-pwm, 0, 255));
+  } else {
+    // Stop
+    digitalWrite(pinINA, LOW);
+    digitalWrite(pinINB, LOW);
+    analogWrite(pinPWM, 0);
+  }
+}
+
+void setMotors(int16_t left, int16_t right) {
+  pwmLeft = -left;   // Left motor is inverted
+  pwmRight = right;
+
+  setMotor(PIN_M1_INA, PIN_M1_INB, PIN_M1_PWM, pwmLeft);
+  setMotor(PIN_M2_INA, PIN_M2_INB, PIN_M2_PWM, pwmRight);
+}
+
+void stopMotors() {
+  targetVelLeft = 0;
+  targetVelRight = 0;
+  setMotors(0, 0);
+  pidLeft.reset();
+  pidRight.reset();
+}
+
+// ============================================================
+// Velocity Calculation
+// ============================================================
+void updateVelocities(float dt) {
+  // Get current encoder counts atomically
+  noInterrupts();
+  int32_t encL = encoderLeftCount;
+  int32_t encR = encoderRightCount;
+  interrupts();
+
+  // Calculate delta ticks
+  int32_t deltaL = encL - prevEncoderLeft;
+  int32_t deltaR = encR - prevEncoderRight;
+
+  prevEncoderLeft = encL;
+  prevEncoderRight = encR;
+
+  // Calculate velocities (m/s)
+  currentVelLeft = (deltaL * METERS_PER_TICK) / dt;
+  currentVelRight = (deltaR * METERS_PER_TICK) / dt;
+}
+
+// ============================================================
+// Odometry Update
+// ============================================================
+void updateOdometry(float dt) {
+  // Get current encoder counts
+  noInterrupts();
+  int32_t encL = encoderLeftCount;
+  int32_t encR = encoderRightCount;
+  interrupts();
+
+  // Calculate distances traveled by each wheel (mm)
+  float distLeft = encL * METERS_PER_TICK * 1000.0f;
+  float distRight = encR * METERS_PER_TICK * 1000.0f;
+
+  // Calculate center distance and angle change
+  float distCenter = (distLeft + distRight) / 2.0f;
+  float deltaTheta = (distRight - distLeft) / WHEELBASE / 1000.0f;  // radians
+
+  // Current heading in radians
+  float theta = pose_th_mrad / 1000.0f;
+
+  // Update pose using simple differential drive kinematics
+  pose_x_mm = (int32_t)(distCenter * cos(theta));
+  pose_y_mm = (int32_t)(distCenter * sin(theta));
+  pose_th_mrad = (int16_t)(deltaTheta * 1000.0f);
+
+  // Wrap angle to [-pi, pi]
+  while (pose_th_mrad > 3142) pose_th_mrad -= 6283;
+  while (pose_th_mrad < -3142) pose_th_mrad += 6283;
+}
+
+// ============================================================
+// PID Control Update
+// ============================================================
+void updateControl(float dt) {
+  // Calculate velocities
+  updateVelocities(dt);
+
+  // Update PID controllers
+  float pwmLf = pidLeft.update(currentVelLeft, targetVelLeft, dt);
+  float pwmRf = pidRight.update(currentVelRight, targetVelRight, dt);
+
+  // Convert to int16 and apply
+  int16_t pwmL = (int16_t)pwmLf;
+  int16_t pwmR = (int16_t)pwmRf;
+
+  setMotors(pwmL, pwmR);
+}
+
+// ============================================================
+// EEPROM Configuration Management
+// ============================================================
+const uint16_t EEPROM_MAGIC = 0xAB12;
+const uint16_t EEPROM_VERSION = 1;
+
+struct EEPROMConfig {
+  uint16_t magic;
+  uint16_t version;
+  float Kp, Ki, Kd;
+  float deadbandLeftFwd, deadbandLeftRev;
+  float deadbandRightFwd, deadbandRightRev;
+  float wheelDiameter;
+  float wheelbase;
+  float ticksPerRev;
+  uint8_t checksum;
+} __attribute__((packed));
+
+uint8_t calcChecksum(const EEPROMConfig& cfg) {
+  uint8_t sum = 0;
+  const uint8_t* ptr = (const uint8_t*)&cfg;
+  for (size_t i = 0; i < sizeof(EEPROMConfig) - 1; i++) {
+    sum ^= ptr[i];
+  }
+  return sum;
+}
+
+void saveConfig() {
+  EEPROMConfig cfg;
+  cfg.magic = EEPROM_MAGIC;
+  cfg.version = EEPROM_VERSION;
+  cfg.Kp = pidLeft.Kp;
+  cfg.Ki = pidLeft.Ki;
+  cfg.Kd = pidLeft.Kd;
+  cfg.deadbandLeftFwd = pidLeft.deadbandForward;
+  cfg.deadbandLeftRev = pidLeft.deadbandReverse;
+  cfg.deadbandRightFwd = pidRight.deadbandForward;
+  cfg.deadbandRightRev = pidRight.deadbandReverse;
+  cfg.wheelDiameter = WHEEL_DIAMETER;
+  cfg.wheelbase = WHEELBASE;
+  cfg.ticksPerRev = TICKS_PER_REV;
+  cfg.checksum = calcChecksum(cfg);
+
+  EEPROM.put(0, cfg);
+}
+
+bool loadConfig() {
+  EEPROMConfig cfg;
+  EEPROM.get(0, cfg);
+
+  // Validate magic and checksum
+  if (cfg.magic != EEPROM_MAGIC || cfg.version != EEPROM_VERSION) {
+    return false;
+  }
+
+  uint8_t expectedChecksum = calcChecksum(cfg);
+  if (cfg.checksum != expectedChecksum) {
+    return false;
+  }
+
+  // Load configuration
+  pidLeft.Kp = pidRight.Kp = cfg.Kp;
+  pidLeft.Ki = pidRight.Ki = cfg.Ki;
+  pidLeft.Kd = pidRight.Kd = cfg.Kd;
+  pidLeft.deadbandForward = cfg.deadbandLeftFwd;
+  pidLeft.deadbandReverse = cfg.deadbandLeftRev;
+  pidRight.deadbandForward = cfg.deadbandRightFwd;
+  pidRight.deadbandReverse = cfg.deadbandRightRev;
+
+  return true;
+}
+
+// ============================================================
+// RobotLink Protocol Handlers
+// ============================================================
+void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
+  switch (type) {
+    case RobotLink::MSG_CMD_VEL: {
+      // Original protocol: (v, w) -> (left, right) velocities
+      if (len != 4) break;
+
+      int16_t v_mm_s = RobotLink::Link::rd_i16_le(&payload[0]);
+      int16_t w_mrad_s = RobotLink::Link::rd_i16_le(&payload[2]);
+
+      // Convert to m/s
+      float v = v_mm_s / 1000.0f;
+      float w = w_mrad_s / 1000.0f;
+
+      // Differential drive kinematics
+      float wheelbase_half = WHEELBASE / 2.0f;
+      targetVelLeft = v - w * wheelbase_half;
+      targetVelRight = v + w * wheelbase_half;
+      break;
+    }
+
+    case RobotLink::MSG_SET_VEL: {
+      // Direct velocity control
+      if (len != sizeof(RobotLink::SetVelPayload)) break;
+
+      RobotLink::SetVelPayload* msg = (RobotLink::SetVelPayload*)payload;
+      targetVelLeft = msg->velLeft;
+      targetVelRight = msg->velRight;
+      break;
+    }
+
+    case RobotLink::MSG_SET_PID: {
+      if (len != sizeof(RobotLink::SetPidPayload)) break;
+
+      RobotLink::SetPidPayload* msg = (RobotLink::SetPidPayload*)payload;
+      pidLeft.Kp = pidRight.Kp = msg->Kp;
+      pidLeft.Ki = pidRight.Ki = msg->Ki;
+      pidLeft.Kd = pidRight.Kd = msg->Kd;
+      break;
+    }
+
+    case RobotLink::MSG_SET_DEADBAND: {
+      if (len != sizeof(RobotLink::SetDeadbandPayload)) break;
+
+      RobotLink::SetDeadbandPayload* msg = (RobotLink::SetDeadbandPayload*)payload;
+      pidLeft.deadbandForward = msg->leftForward;
+      pidLeft.deadbandReverse = msg->leftReverse;
+      pidRight.deadbandForward = msg->rightForward;
+      pidRight.deadbandReverse = msg->rightReverse;
+      break;
+    }
+
+    case RobotLink::MSG_ENABLE_STREAM: {
+      if (len != sizeof(RobotLink::EnableStreamPayload)) break;
+
+      RobotLink::EnableStreamPayload* msg = (RobotLink::EnableStreamPayload*)payload;
+      streamEnabled = msg->enable != 0;
+      streamInterval = msg->intervalMs;
+      break;
+    }
+
+    case RobotLink::MSG_ZERO_ENCODERS: {
+      noInterrupts();
+      encoderLeftCount = 0;
+      encoderRightCount = 0;
+      interrupts();
+
+      prevEncoderLeft = 0;
+      prevEncoderRight = 0;
+      pose_x_mm = 0;
+      pose_y_mm = 0;
+      pose_th_mrad = 0;
+      break;
+    }
+
+    case RobotLink::MSG_STOP: {
+      stopMotors();
+      break;
+    }
+
+    case RobotLink::MSG_SAVE_CONFIG: {
+      saveConfig();
+      break;
+    }
+
+    case RobotLink::MSG_LOAD_CONFIG: {
+      loadConfig();
+      break;
+    }
+
+    case RobotLink::MSG_GET_CONFIG: {
+      RobotLink::ConfigPayload cfg;
+      cfg.wheelDiameter = WHEEL_DIAMETER;
+      cfg.wheelbase = WHEELBASE;
+      cfg.ticksPerRev = TICKS_PER_REV;
+      cfg.invertLeft = 0;
+      cfg.invertRight = 1;
+      cfg.balanceEnable = 0;
+      cfg.reserved = 0;
+      cfg.balanceGain = 0;
+
+      robotLink->sendStruct(RobotLink::MSG_CONFIG_RESP, cfg);
+      break;
+    }
+
+    case RobotLink::MSG_PING: {
+      // Echo back as pong
+      robotLink->sendFrame(RobotLink::MSG_PONG, payload, len);
+      break;
+    }
+  }
+}
+
+void sendOdometry() {
+  // Get current encoder counts atomically
+  noInterrupts();
+  int32_t encL = encoderLeftCount;
+  int32_t encR = encoderRightCount;
+  interrupts();
+
+  // Calculate delta ticks since last send
+  static int32_t lastSentL = 0;
+  static int32_t lastSentR = 0;
+
+  int16_t deltaL = (int16_t)(encL - lastSentL);
+  int16_t deltaR = (int16_t)(encR - lastSentR);
+
+  lastSentL = encL;
+  lastSentR = encR;
+
+  // Build ODOM message (original protocol format)
+  uint8_t payload[18];
+  uint32_t t_ms = millis();
+
+  RobotLink::Link::wr_u32_le(&payload[0], t_ms);
+  RobotLink::Link::wr_i16_le(&payload[4], deltaL);
+  RobotLink::Link::wr_i16_le(&payload[6], deltaR);
+  RobotLink::Link::wr_i32_le(&payload[8], pose_x_mm);
+  RobotLink::Link::wr_i32_le(&payload[12], pose_y_mm);
+  RobotLink::Link::wr_i16_le(&payload[16], pose_th_mrad);
+
+  robotLink->sendFrame(RobotLink::MSG_ODOM, payload, 18);
+}
+
+// ============================================================
+// Setup
+// ============================================================
+void setup() {
+  // Initialize USB serial for debugging
+  Serial.begin(115200);
+  delay(100);
+
+  Serial.println(F("\n=== Arduino Motor Control Firmware ==="));
+  Serial.println(F("Version: 1.0"));
+  Serial.println(F("Debug enabled on USB Serial (115200)"));
+  Serial.println(F("RobotLink on SoftwareSerial A0/A1 (9600)"));
+  Serial.println();
+
+  // Initialize SoftwareSerial for ESP32 communication
+  softSerial.begin(9600);
+  Serial.println(F("SoftwareSerial initialized at 9600 baud"));
+
+  // Initialize motor pins
+  pinMode(PIN_M1_INA, OUTPUT);
+  pinMode(PIN_M1_INB, OUTPUT);
+  pinMode(PIN_M1_PWM, OUTPUT);
+  pinMode(PIN_M2_INA, OUTPUT);
+  pinMode(PIN_M2_INB, OUTPUT);
+  pinMode(PIN_M2_PWM, OUTPUT);
+
+  // Initialize encoder pins
+  pinMode(PIN_ENC_L_A, INPUT_PULLUP);
+  pinMode(PIN_ENC_L_B, INPUT_PULLUP);
+  pinMode(PIN_ENC_R_A, INPUT_PULLUP);
+  pinMode(PIN_ENC_R_B, INPUT_PULLUP);
+
+  // Attach interrupts
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC_L_A), isrEncoderLeft, RISING);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC_R_A), isrEncoderRight, RISING);
+
+  // Initialize motors to stopped state
+  stopMotors();
+
+  // Load configuration from EEPROM
+  if (!loadConfig()) {
+    // First boot - save defaults
+    saveConfig();
+  }
+
+  // Initialize RobotLink protocol on SoftwareSerial
+  RobotLink::Config cfg;
+  cfg.maxPayload = 64;
+  cfg.rejectOversize = true;
+  robotLink = new RobotLink::Link(softSerial, cfg);
+  Serial.println(F("RobotLink protocol initialized"));
+
+  Serial.println(F("\n=== Setup Complete ==="));
+  Serial.println(F("Ready for commands from ESP32"));
+  Serial.println();
+
+  // Initialize timing
+  lastControlUpdate = millis();
+  lastOdomSend = millis();
+}
+
+// ============================================================
+// Main Loop
+// ============================================================
+void loop() {
+  unsigned long now = millis();
+
+  // Poll for incoming messages
+  robotLink->poll(handleFrame);
+
+  // Control loop update (20 Hz)
+  if (now - lastControlUpdate >= CONTROL_INTERVAL) {
+    float dt = (now - lastControlUpdate) / 1000.0f;
+    lastControlUpdate = now;
+
+    // Update control and odometry
+    updateControl(dt);
+    updateOdometry(dt);
+  }
+
+  // Send odometry if streaming enabled
+  if (streamEnabled && (now - lastOdomSend >= streamInterval)) {
+    lastOdomSend = now;
+    sendOdometry();
+  }
+}

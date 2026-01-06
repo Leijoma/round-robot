@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Control Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Status Bar -->
+    <header class="status-bar">
+        <h1>Robot Control Dashboard</h1>
+        <div class="status-info">
+            <span id="esp32-status" class="status-offline">ESP32: Connecting...</span>
+            <span id="latency">Latency: --ms</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="dashboard">
+        <!-- Motor Control Panel -->
+        <section class="panel control-panel">
+            <h2>Motor Control</h2>
+
+            <!-- Directional Controls -->
+            <div class="direction-controls">
+                <button class="btn-direction btn-forward" data-direction="forward" title="W or ↑">
+                    ▲<br><span>FORWARD</span>
+                </button>
+                <div class="btn-row">
+                    <button class="btn-direction btn-left" data-direction="left" title="A or ←">
+                        ◄<br><span>LEFT</span>
+                    </button>
+                    <button class="btn-stop" id="btn-stop" title="SPACE">
+                        STOP
+                    </button>
+                    <button class="btn-direction btn-right" data-direction="right" title="D or →">
+                        ►<br><span>RIGHT</span>
+                    </button>
+                </div>
+                <button class="btn-direction btn-backward" data-direction="backward" title="S or ↓">
+                    ▼<br><span>BACKWARD</span>
+                </button>
+            </div>
+
+            <!-- Velocity Slider -->
+            <div class="control-group">
+                <label for="velocity-slider">Velocity:</label>
+                <input type="range" id="velocity-slider" min="0.1" max="0.5" step="0.05" value="0.3">
+                <span id="velocity-value" class="value-display">0.3 m/s</span>
+            </div>
+
+            <!-- Odometry Display -->
+            <div class="odometry-display">
+                <div class="odom-header">
+                    <h3>Odometry</h3>
+                    <button id="btn-toggle-stream" class="btn-stream" title="Toggle odometry streaming">
+                        Streaming: ON
+                    </button>
+                </div>
+                <div class="odom-grid">
+                    <div class="odom-item">
+                        <span class="label">Velocity L:</span>
+                        <span id="vel-left" class="value">0.00 m/s</span>
+                    </div>
+                    <div class="odom-item">
+                        <span class="label">Velocity R:</span>
+                        <span id="vel-right" class="value">0.00 m/s</span>
+                    </div>
+                    <div class="odom-item">
+                        <span class="label">Vel L (ticks/s):</span>
+                        <span id="vel-left-ticks" class="value">0</span>
+                    </div>
+                    <div class="odom-item">
+                        <span class="label">Vel R (ticks/s):</span>
+                        <span id="vel-right-ticks" class="value">0</span>
+                    </div>
+                    <div class="odom-item">
+                        <span class="label">Encoder L:</span>
+                        <span id="enc-left" class="value">0</span>
+                    </div>
+                    <div class="odom-item">
+                        <span class="label">Encoder R:</span>
+                        <span id="enc-right" class="value">0</span>
+                    </div>
+                    <div class="odom-item">
+                        <span class="label">PWM L:</span>
+                        <span id="pwm-left" class="value">0</span>
+                    </div>
+                    <div class="odom-item">
+                        <span class="label">PWM R:</span>
+                        <span id="pwm-right" class="value">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keyboard Hint -->
+            <div class="keyboard-hint">
+                <small>⌨️ Keyboard: WASD or Arrow Keys | SPACE to stop</small>
+            </div>
+        </section>
+
+        <!-- LIDAR Visualization Panel -->
+        <section class="panel lidar-panel">
+            <h2>LIDAR Visualization</h2>
+
+            <!-- LIDAR Controls -->
+            <div class="lidar-controls">
+                <button id="btn-lidar-enable" class="btn-lidar" title="Enable/Disable LIDAR motor">
+                    LIDAR: OFF
+                </button>
+                <div class="control-group inline">
+                    <label for="lidar-rpm">RPM:</label>
+                    <input type="number" id="lidar-rpm" min="200" max="300" step="10" value="220">
+                    <button id="btn-set-rpm" class="btn-secondary">Set</button>
+                </div>
+                <div class="lidar-stats">
+                    <span id="lidar-status" class="status-text">No data</span>
+                </div>
+            </div>
+
+            <!-- Polar Plot Canvas -->
+            <div class="polar-plot-container">
+                <canvas id="lidar-canvas" width="500" height="500"></canvas>
+            </div>
+        </section>
+
+        <section class="panel placeholder-panel">
+            <h2>Occupancy Map</h2>
+            <div class="placeholder-content">
+                <p>🗺️ Coming soon...</p>
+                <p>Occupancy grid map will appear here</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Load JavaScript -->
+    <script src="/js/app.js"></script>
+    <script src="/js/lidar.js"></script>
+</body>
+</html>

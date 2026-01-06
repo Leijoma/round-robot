@@ -1,0 +1,58 @@
+// Pin test - rename to main.cpp to use
+// This will help diagnose the wiring
+
+#include <Arduino.h>
+
+#define LIDAR_RX_PIN 16
+#define LIDAR_PWM_PIN 21
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.println("\n=== ESP32 Pin Test ===");
+  Serial.println("Testing Lidar connections...\n");
+
+  // Test PWM output
+  Serial.printf("Pin %d (PWM): Testing...\n", LIDAR_PWM_PIN);
+  pinMode(LIDAR_PWM_PIN, OUTPUT);
+  digitalWrite(LIDAR_PWM_PIN, HIGH);
+  delay(1000);
+  digitalWrite(LIDAR_PWM_PIN, LOW);
+  Serial.println("PWM pin toggled. Did you see motor twitch?");
+
+  // Test Serial RX - just count incoming bytes
+  Serial.printf("\nPin %d (RX): Listening for data...\n", LIDAR_RX_PIN);
+  Serial.println("Connect Lidar TX to this pin.");
+  Serial.println("Watching for ANY incoming bytes (inverted)...\n");
+
+  Serial2.begin(115200, SERIAL_8N1, LIDAR_RX_PIN, -1, true);  // RX only, inverted
+}
+
+void loop() {
+  static uint32_t lastPrint = 0;
+  static uint32_t byteCount = 0;
+
+  while (Serial2.available()) {
+    uint8_t b = Serial2.read();
+    byteCount++;
+
+    // Print first few bytes as hex
+    if (byteCount <= 50) {
+      Serial.printf("0x%02X ", b);
+      if (byteCount % 16 == 0) Serial.println();
+    }
+  }
+
+  // Print stats every 2 seconds
+  if (millis() - lastPrint >= 2000) {
+    lastPrint = millis();
+    Serial.printf("[%lu s] Total bytes received: %lu\n", millis()/1000, byteCount);
+
+    if (byteCount == 0) {
+      Serial.println("  -> Still no data. Check wiring!");
+    }
+  }
+
+  delay(10);
+}

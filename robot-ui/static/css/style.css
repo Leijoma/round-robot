@@ -1,0 +1,455 @@
+/* Robot Control UI - Dark Theme */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Status Bar */
+.status-bar {
+    background-color: #2d2d2d;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #444;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.status-bar h1 {
+    font-size: 1.5rem;
+    color: #4fc3f7;
+}
+
+.status-info {
+    display: flex;
+    gap: 2rem;
+    font-size: 0.9rem;
+}
+
+.status-online {
+    color: #4caf50;
+}
+
+.status-offline {
+    color: #f44336;
+}
+
+/* Main Dashboard */
+.dashboard {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 350px 1fr 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    overflow: hidden;
+}
+
+/* Panels */
+.panel {
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.panel h2 {
+    font-size: 1.3rem;
+    margin-bottom: 1.5rem;
+    color: #4fc3f7;
+    border-bottom: 2px solid #444;
+    padding-bottom: 0.5rem;
+}
+
+/* Motor Control Panel */
+.control-panel {
+    max-width: 350px;
+}
+
+.direction-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.btn-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.btn-direction {
+    width: 100px;
+    height: 70px;
+    background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-direction:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(79, 195, 247, 0.4);
+}
+
+.btn-direction:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+}
+
+.btn-direction span {
+    font-size: 0.7rem;
+    display: block;
+    margin-top: 0.2rem;
+}
+
+.btn-stop {
+    width: 100px;
+    height: 70px;
+    background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-stop:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 12px rgba(244, 67, 54, 0.4);
+}
+
+.btn-stop:active {
+    transform: scale(0.98);
+}
+
+/* Control Group */
+.control-group {
+    margin-bottom: 1.5rem;
+}
+
+.control-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #b0b0b0;
+    font-size: 0.9rem;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    height: 6px;
+    background: #444;
+    border-radius: 3px;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #4fc3f7;
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.control-group input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #4fc3f7;
+    cursor: pointer;
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.value-display {
+    display: inline-block;
+    margin-left: 1rem;
+    padding: 0.3rem 0.8rem;
+    background-color: #444;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #4fc3f7;
+}
+
+/* Odometry Display */
+.odometry-display {
+    margin-top: 2rem;
+}
+
+.odom-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.odometry-display h3 {
+    font-size: 1.1rem;
+    color: #b0b0b0;
+    margin: 0;
+}
+
+.btn-stream {
+    padding: 0.4rem 0.8rem;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.btn-stream:hover {
+    background-color: #45a049;
+    transform: translateY(-1px);
+}
+
+.btn-stream.stream-off {
+    background-color: #f44336;
+}
+
+.btn-stream.stream-off:hover {
+    background-color: #da190b;
+}
+
+.odom-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+}
+
+.odom-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.6rem;
+    background-color: #383838;
+    border-radius: 4px;
+    border-left: 3px solid #4fc3f7;
+}
+
+.odom-item .label {
+    color: #b0b0b0;
+    font-size: 0.9rem;
+}
+
+.odom-item .value {
+    color: #e0e0e0;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+}
+
+/* Keyboard Hint */
+.keyboard-hint {
+    margin-top: 2rem;
+    padding: 1rem;
+    background-color: #383838;
+    border-radius: 4px;
+    text-align: center;
+    color: #888;
+}
+
+/* Placeholder Panels */
+.placeholder-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.placeholder-content {
+    text-align: center;
+    color: #666;
+}
+
+.placeholder-content p {
+    margin: 0.5rem 0;
+    font-size: 1.1rem;
+}
+
+.placeholder-content p:first-child {
+    font-size: 3rem;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .dashboard {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+    }
+
+    .control-panel {
+        max-width: 100%;
+    }
+}
+
+/* Button Active States */
+.btn-direction.active {
+    background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);
+    box-shadow: 0 2px 8px rgba(79, 195, 247, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Scrollbar Styling */
+.panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.panel::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 4px;
+}
+
+.panel::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+.panel::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+/* ===================================
+   LIDAR Visualization Styles
+   =================================== */
+
+.lidar-panel {
+    grid-column: span 2;
+}
+
+.lidar-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+}
+
+.lidar-controls .control-group.inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.lidar-controls .control-group.inline label {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.lidar-controls input[type="number"] {
+    width: 70px;
+    padding: 0.375rem 0.5rem;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.875rem;
+}
+
+.btn-lidar {
+    padding: 0.5rem 1rem;
+    background: #444;
+    border: none;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-lidar:hover {
+    background: #555;
+}
+
+.btn-lidar.active {
+    background: #4CAF50;
+    color: white;
+}
+
+.btn-secondary {
+    padding: 0.375rem 0.75rem;
+    background: #555;
+    border: none;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #666;
+}
+
+.lidar-stats {
+    margin-left: auto;
+}
+
+.status-text {
+    font-size: 0.875rem;
+    font-family: 'Courier New', monospace;
+}
+
+.status-text.status-active {
+    color: #4CAF50;
+}
+
+.status-text.status-inactive {
+    color: #888;
+}
+
+.polar-plot-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    background: #1a1a1a;
+    border-radius: 4px;
+}
+
+#lidar-canvas {
+    border: 1px solid #333;
+    border-radius: 4px;
+    background: #0a0a0a;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .lidar-panel {
+        grid-column: span 1;
+    }
+    
+    #lidar-canvas {
+        width: 100%;
+        height: auto;
+    }
+}
