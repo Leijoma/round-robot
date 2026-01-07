@@ -69,6 +69,16 @@ function initializeWebSocket() {
             handleLidarScan(data);
         }
     });
+
+    socket.on('robot_status', (data) => {
+        updateConfigDisplay(data);
+    });
+
+    socket.on('config_saved', (data) => {
+        if (data.success) {
+            showConfigStatus('Configuration saved to EEPROM', 'success');
+        }
+    });
 }
 
 /**
@@ -118,6 +128,24 @@ function initializeControls() {
         streamButton.classList.toggle('stream-off', !streamingEnabled);
         console.log(`Odometry streaming: ${streamingEnabled ? 'ENABLED' : 'DISABLED'}`);
     });
+
+    // Configuration panel buttons
+    const btnReadConfig = document.getElementById('btn-read-config');
+    const btnApplyPid = document.getElementById('btn-apply-pid');
+    const btnApplyDeadband = document.getElementById('btn-apply-deadband');
+    const btnSaveConfig = document.getElementById('btn-save-config');
+
+    btnReadConfig.addEventListener('click', requestRobotStatus);
+    btnApplyPid.addEventListener('click', applyPidSettings);
+    btnApplyDeadband.addEventListener('click', applyDeadbandSettings);
+    btnSaveConfig.addEventListener('click', saveConfigToEEPROM);
+
+    // Request initial status on startup
+    setTimeout(() => {
+        if (isConnected) {
+            requestRobotStatus();
+        }
+    }, 1000);
 }
 
 /**
@@ -357,6 +385,104 @@ function updatePoseDisplay(data) {
     if (data.drift) {
         document.getElementById('pose-drift-pos').textContent = `${data.drift.position.toFixed(3)} m`;
         document.getElementById('pose-drift-theta').textContent = `${data.drift.heading.toFixed(1)}°`;
+    }
+}
+
+/**
+ * Configuration Panel Functions
+ */
+function requestRobotStatus() {
+    if (!socket || !isConnected) {
+        showConfigStatus('Not connected to server', 'error');
+        return;
+    }
+
+    console.log('Requesting robot status...');
+    socket.emit('request_status');
+    showConfigStatus('Reading from Arduino...', '');
+}
+
+function updateConfigDisplay(data) {
+    // Update PID values
+    if (data.pid) {
+        document.getElementById('pid-kp').value = data.pid.kp.toFixed(2);
+        document.getElementById('pid-ki').value = data.pid.ki.toFixed(2);
+        document.getElementById('pid-kd').value = data.pid.kd.toFixed(2);
+    }
+
+    // Update deadband values
+    if (data.deadband) {
+        document.getElementById('db-left-fwd').value = data.deadband.left_forward.toFixed(1);
+        document.getElementById('db-left-rev').value = data.deadband.left_reverse.toFixed(1);
+        document.getElementById('db-right-fwd').value = data.deadband.right_forward.toFixed(1);
+        document.getElementById('db-right-rev').value = data.deadband.right_reverse.toFixed(1);
+    }
+
+    console.log('Updated config display:', data);
+    showConfigStatus('Configuration loaded', 'success');
+}
+
+function applyPidSettings() {
+    if (!socket || !isConnected) {
+        showConfigStatus('Not connected to server', 'error');
+        return;
+    }
+
+    const kp = parseFloat(document.getElementById('pid-kp').value);
+    const ki = parseFloat(document.getElementById('pid-ki').value);
+    const kd = parseFloat(document.getElementById('pid-kd').value);
+
+    console.log(`Applying PID: Kp=${kp}, Ki=${ki}, Kd=${kd}`);
+    socket.emit('set_pid', { kp, ki, kd });
+    showConfigStatus('Applying PID settings...', '');
+}
+
+function applyDeadbandSettings() {
+    if (!socket || !isConnected) {
+        showConfigStatus('Not connected to server', 'error');
+        return;
+    }
+
+    const leftFwd = parseFloat(document.getElementById('db-left-fwd').value);
+    const leftRev = parseFloat(document.getElementById('db-left-rev').value);
+    const rightFwd = parseFloat(document.getElementById('db-right-fwd').value);
+    const rightRev = parseFloat(document.getElementById('db-right-rev').value);
+
+    console.log(`Applying Deadband: L_fwd=${leftFwd}, L_rev=${leftRev}, R_fwd=${rightFwd}, R_rev=${rightRev}`);
+    socket.emit('set_deadband', {
+        left_forward: leftFwd,
+        left_reverse: leftRev,
+        right_forward: rightFwd,
+        right_reverse: rightRev
+    });
+    showConfigStatus('Applying deadband settings...', '');
+}
+
+function saveConfigToEEPROM() {
+    if (!socket || !isConnected) {
+        showConfigStatus('Not connected to server', 'error');
+        return;
+    }
+
+    console.log('Saving configuration to EEPROM...');
+    socket.emit('save_config');
+    showConfigStatus('Saving to EEPROM...', '');
+}
+
+function showConfigStatus(message, type) {
+    const statusElement = document.getElementById('config-status');
+    statusElement.textContent = message;
+    statusElement.className = 'config-status';
+    if (type) {
+        statusElement.classList.add(type);
+    }
+
+    // Clear status after 3 seconds
+    if (type === 'success' || type === 'error') {
+        setTimeout(() => {
+            statusElement.textContent = 'Ready';
+            statusElement.className = 'config-status';
+        }, 3000);
     }
 }
 

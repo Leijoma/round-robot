@@ -126,7 +126,7 @@ class StatusPayload:
 
     @classmethod
     def unpack(cls, data: bytes) -> 'StatusPayload':
-        values = struct.unpack('<fffFFFFBBHIII', data)
+        values = struct.unpack('<fffffffBBHIII', data)
         return cls(
             kp=values[0],
             ki=values[1],
@@ -401,6 +401,18 @@ class RobotLink:
         """Enable/disable continuous odometry streaming"""
         payload = struct.pack('<BH', 1 if enable else 0, interval_ms)
         return self.send_frame(MessageType.MSG_ENABLE_STREAM, payload)
+
+    def request_status(self) -> bool:
+        """Request current robot status (PID, deadband, etc.)"""
+        return self.send_frame(MessageType.MSG_STATUS)
+
+    def save_config(self) -> bool:
+        """Save current configuration to EEPROM"""
+        return self.send_frame(MessageType.MSG_SAVE_CONFIG)
+
+    def load_config(self) -> bool:
+        """Load configuration from EEPROM"""
+        return self.send_frame(MessageType.MSG_LOAD_CONFIG)
 
     def get_config(self) -> bool:
         """Request robot configuration"""

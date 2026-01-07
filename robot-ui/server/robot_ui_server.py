@@ -276,6 +276,40 @@ def esp32_communication_thread():
                     import traceback
                     traceback.print_exc()
 
+            # Handle STATUS messages (robot configuration response)
+            elif msg_type == MessageType.MSG_STATUS:
+                try:
+                    from robotlink import StatusPayload
+                    status = StatusPayload.unpack(payload)
+
+                    print(f'Received STATUS: Kp={status.kp:.2f}, Ki={status.ki:.2f}, Kd={status.kd:.2f}, '
+                          f'DB=[{status.deadband[0]:.1f}, {status.deadband[1]:.1f}, '
+                          f'{status.deadband[2]:.1f}, {status.deadband[3]:.1f}]')
+
+                    # Broadcast to all connected WebSocket clients
+                    socketio.emit('robot_status', {
+                        'pid': {
+                            'kp': status.kp,
+                            'ki': status.ki,
+                            'kd': status.kd
+                        },
+                        'deadband': {
+                            'left_forward': status.deadband[0],
+                            'left_reverse': status.deadband[1],
+                            'right_forward': status.deadband[2],
+                            'right_reverse': status.deadband[3]
+                        },
+                        'pid_enabled': status.pid_enabled,
+                        'stream_enabled': status.stream_enabled,
+                        'stream_interval': status.stream_interval,
+                        'uptime': status.uptime
+                    })
+
+                except Exception as e:
+                    print(f'Error parsing STATUS: {e}')
+                    import traceback
+                    traceback.print_exc()
+
             # Log synchronizer and localization stats every 10 seconds
             if data_synchronizer and (time.time() - last_stats_time) >= 10.0:
                 stats = data_synchronizer.get_stats()
@@ -432,6 +466,96 @@ def handle_lidar_set_rpm(data):
 
     except Exception as e:
         print(f'Error handling lidar_set_rpm: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('request_status')
+def handle_request_status():
+    """Request current robot status (PID, deadband, etc.)"""
+    global robot
+
+    if robot is None:
+        emit('error', {'message': 'ESP32 not connected'})
+        return
+
+    try:
+        robot.request_status()
+        print('Requested robot status')
+
+    except Exception as e:
+        print(f'Error requesting status: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('set_pid')
+def handle_set_pid(data):
+    """Set PID parameters"""
+    global robot
+
+    if robot is None:
+        emit('error', {'message': 'ESP32 not connected'})
+        return
+
+    try:
+        kp = float(data.get('kp'))
+        ki = float(data.get('ki'))
+        kd = float(data.get('kd'))
+
+        robot.set_pid(kp, ki, kd)
+        print(f'Set PID: Kp={kp}, Ki={ki}, Kd={kd}')
+
+        # Request updated status to confirm
+        time.sleep(0.1)
+        robot.request_status()
+
+    except Exception as e:
+        print(f'Error setting PID: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('set_deadband')
+def handle_set_deadband(data):
+    """Set deadband parameters"""
+    global robot
+
+    if robot is None:
+        emit('error', {'message': 'ESP32 not connected'})
+        return
+
+    try:
+        left_fwd = float(data.get('left_forward'))
+        left_rev = float(data.get('left_reverse'))
+        right_fwd = float(data.get('right_forward'))
+        right_rev = float(data.get('right_reverse'))
+
+        robot.set_deadband(left_fwd, left_rev, right_fwd, right_rev)
+        print(f'Set Deadband: L_fwd={left_fwd}, L_rev={left_rev}, R_fwd={right_fwd}, R_rev={right_rev}')
+
+        # Request updated status to confirm
+        time.sleep(0.1)
+        robot.request_status()
+
+    except Exception as e:
+        print(f'Error setting deadband: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('save_config')
+def handle_save_config():
+    """Save configuration to EEPROM"""
+    global robot
+
+    if robot is None:
+        emit('error', {'message': 'ESP32 not connected'})
+        return
+
+    try:
+        robot.save_config()
+        print('Saved configuration to EEPROM')
+        emit('config_saved', {'success': True})
+
+    except Exception as e:
+        print(f'Error saving config: {e}')
         emit('error', {'message': str(e)})
 
 
