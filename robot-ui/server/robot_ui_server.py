@@ -168,7 +168,7 @@ def esp32_communication_thread():
                         # Emit pose update (Story 5.1)
                         dr_pose = localizer.get_dead_reckoning_pose()
                         icp_pose = localizer.get_corrected_pose()
-                        drift = localizer.calculate_drift()
+                        drift = localizer.get_pose_drift()
 
                         socketio.emit('pose_update', {
                             'dead_reckoning': {
