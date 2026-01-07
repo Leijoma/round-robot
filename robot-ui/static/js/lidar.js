@@ -207,7 +207,8 @@ function renderLidarPlot() {
             const angleRad = ((angle - 90) * Math.PI) / 180;
             const r = distance * scale;
 
-            const x = centerX + r * Math.cos(angleRad);
+            // Negate X to fix left/right mirroring
+            const x = centerX - r * Math.cos(angleRad);
             const y = centerY + r * Math.sin(angleRad);
 
             // All points in green
