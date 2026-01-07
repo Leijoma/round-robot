@@ -559,6 +559,46 @@ def handle_save_config():
         emit('error', {'message': str(e)})
 
 
+@socketio.on('reset_pose')
+def handle_reset_pose():
+    """Reset robot pose to origin"""
+    global localizer
+
+    if localizer is None:
+        emit('error', {'message': 'Localizer not initialized'})
+        return
+
+    try:
+        localizer.reset()
+        print('Reset pose to origin (0, 0, 0°)')
+
+        # Immediately send updated pose to confirm
+        dr_pose = localizer.get_dead_reckoning_pose()
+        icp_pose = localizer.get_corrected_pose()
+        drift = localizer.get_pose_drift()
+
+        socketio.emit('pose_update', {
+            'dead_reckoning': {
+                'x': dr_pose.x,
+                'y': dr_pose.y,
+                'theta_deg': np.rad2deg(dr_pose.theta)
+            },
+            'icp_corrected': {
+                'x': icp_pose.x,
+                'y': icp_pose.y,
+                'theta_deg': np.rad2deg(icp_pose.theta)
+            },
+            'drift': {
+                'position': drift['distance_drift'],
+                'heading': drift['heading_drift_deg']
+            }
+        })
+
+    except Exception as e:
+        print(f'Error resetting pose: {e}')
+        emit('error', {'message': str(e)})
+
+
 @app.route('/')
 def index():
     """Serve index.html"""

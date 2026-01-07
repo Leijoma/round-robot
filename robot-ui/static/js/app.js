@@ -140,6 +140,10 @@ function initializeControls() {
     btnApplyDeadband.addEventListener('click', applyDeadbandSettings);
     btnSaveConfig.addEventListener('click', saveConfigToEEPROM);
 
+    // Reset pose button
+    const btnResetPose = document.getElementById('btn-reset-pose');
+    btnResetPose.addEventListener('click', resetPose);
+
     // Request initial status on startup
     setTimeout(() => {
         if (isConnected) {
@@ -483,6 +487,21 @@ function showConfigStatus(message, type) {
             statusElement.textContent = 'Ready';
             statusElement.className = 'config-status';
         }, 3000);
+    }
+}
+
+/**
+ * Pose Reset Function
+ */
+function resetPose() {
+    if (!socket || !isConnected) {
+        alert('Not connected to server');
+        return;
+    }
+
+    if (confirm('Reset robot pose to origin (0, 0, 0°)?')) {
+        console.log('Resetting pose to origin...');
+        socket.emit('reset_pose');
     }
 }
 

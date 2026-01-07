@@ -644,6 +644,25 @@ body {
     color: #00ff00;
 }
 
+.btn-reset-pose {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.6rem 1rem;
+    background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-reset-pose:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(244, 67, 54, 0.4);
+}
+
 /* ===================================
    Map Canvas Styles
    =================================== */
