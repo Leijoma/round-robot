@@ -49,7 +49,7 @@ body {
 .dashboard {
     flex: 1;
     display: grid;
-    grid-template-columns: 350px 1fr 1fr;
+    grid-template-columns: 350px 350px 1fr 1fr;
     gap: 1.5rem;
     padding: 1.5rem;
     overflow: hidden;
@@ -437,6 +437,111 @@ body {
 }
 
 #lidar-canvas {
+    border: 1px solid #333;
+    border-radius: 4px;
+    background: #0a0a0a;
+}
+
+/* ===================================
+   Pose Display Styles
+   =================================== */
+
+.pose-panel {
+    grid-column: span 1;
+}
+
+.pose-display {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.pose-section {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+}
+
+.pose-section h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: #b0b0b0;
+    font-weight: 600;
+}
+
+.pose-label-dead-reckoning {
+    color: #ff9500 !important;
+}
+
+.pose-label-icp {
+    color: #00ff00 !important;
+}
+
+.pose-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+}
+
+.pose-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    background-color: #383838;
+    border-radius: 4px;
+}
+
+.pose-item .label {
+    color: #b0b0b0;
+    font-size: 0.9rem;
+}
+
+.pose-item .value {
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+}
+
+.pose-value-dead-reckoning {
+    color: #ff9500;
+}
+
+.pose-value-icp {
+    color: #00ff00;
+}
+
+/* ===================================
+   Map Canvas Styles
+   =================================== */
+
+.map-panel {
+    grid-column: span 1;
+}
+
+.map-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+}
+
+.map-controls .status-text {
+    margin-left: auto;
+}
+
+.map-canvas-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    background: #1a1a1a;
+    border-radius: 4px;
+}
+
+#map-canvas {
     border: 1px solid #333;
     border-radius: 4px;
     background: #0a0a0a;

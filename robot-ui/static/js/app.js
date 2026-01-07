@@ -52,6 +52,13 @@ function initializeWebSocket() {
         updateOdometryDisplay(data);
     });
 
+    socket.on('pose_update', (data) => {
+        updatePoseDisplay(data);
+        if (typeof handlePoseUpdate === 'function') {
+            handlePoseUpdate(data);
+        }
+    });
+
     socket.on('error', (data) => {
         console.error('Server error:', data.message);
         alert(`Error: ${data.message}`);
@@ -327,6 +334,30 @@ function highlightDirectionButton(direction) {
 function removeDirectionHighlight() {
     const buttons = document.querySelectorAll('.btn-direction');
     buttons.forEach(btn => btn.classList.remove('active'));
+}
+
+function updatePoseDisplay(data) {
+    // Dead reckoning pose
+    if (data.dead_reckoning) {
+        const dr = data.dead_reckoning;
+        document.getElementById('pose-dr-x').textContent = `${dr.x.toFixed(3)} m`;
+        document.getElementById('pose-dr-y').textContent = `${dr.y.toFixed(3)} m`;
+        document.getElementById('pose-dr-theta').textContent = `${dr.theta_deg.toFixed(1)}°`;
+    }
+
+    // ICP-corrected pose
+    if (data.icp_corrected) {
+        const icp = data.icp_corrected;
+        document.getElementById('pose-icp-x').textContent = `${icp.x.toFixed(3)} m`;
+        document.getElementById('pose-icp-y').textContent = `${icp.y.toFixed(3)} m`;
+        document.getElementById('pose-icp-theta').textContent = `${icp.theta_deg.toFixed(1)}°`;
+    }
+
+    // Drift
+    if (data.drift) {
+        document.getElementById('pose-drift-pos').textContent = `${data.drift.position.toFixed(3)} m`;
+        document.getElementById('pose-drift-theta').textContent = `${data.drift.heading.toFixed(1)}°`;
+    }
 }
 
 /**

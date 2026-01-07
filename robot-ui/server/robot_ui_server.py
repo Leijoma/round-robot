@@ -165,6 +165,28 @@ def esp32_communication_thread():
                         data_synchronizer.add_odometry(odom_reading)
                         localizer.update_odometry(odom_reading)
 
+                        # Emit pose update (Story 5.1)
+                        dr_pose = localizer.get_dead_reckoning_pose()
+                        icp_pose = localizer.get_corrected_pose()
+                        drift = localizer.calculate_drift()
+
+                        socketio.emit('pose_update', {
+                            'dead_reckoning': {
+                                'x': dr_pose.x,
+                                'y': dr_pose.y,
+                                'theta_deg': np.rad2deg(dr_pose.theta)
+                            },
+                            'icp_corrected': {
+                                'x': icp_pose.x,
+                                'y': icp_pose.y,
+                                'theta_deg': np.rad2deg(icp_pose.theta)
+                            },
+                            'drift': {
+                                'position': drift['distance_drift'],
+                                'heading': drift['heading_drift_deg']
+                            }
+                        })
+
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('odom_update', {
                         'encoder_left': odom_state['encoder_left_total'],
