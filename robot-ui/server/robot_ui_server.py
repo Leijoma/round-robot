@@ -9,15 +9,18 @@ import threading
 import time
 import sys
 import os
+import numpy as np
 
 # Add server directory to Python path for robotlink import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from robotlink import RobotLink, MessageType, OdomPayload, LidarScanPayload
 
-# SLAM imports (Phase 2)
+# SLAM imports (Phase 2 & 3)
 from slam.data_sync import DataSynchronizer
 from slam.sensor_data import OdomReading, LidarScan, LidarReading
+from slam.motion_model import DifferentialDriveModel, RobotParameters
+from slam.dead_reckoning import DeadReckoning
 
 # Configuration
 ESP32_HOST = '192.168.68.52'
@@ -34,8 +37,9 @@ robot_connected = False
 running = False
 esp32_thread = None
 
-# SLAM state (Phase 2)
+# SLAM state (Phase 2 & 3)
 data_synchronizer = None
+dead_reckoning = None
 
 # Odometry state tracking
 odom_state = {
@@ -61,9 +65,9 @@ METERS_PER_TICK = (WHEEL_DIAMETER * 3.14159) / TICKS_PER_REV
 
 def init_robot_connection():
     """Initialize connection to ESP32"""
-    global robot, robot_connected, data_synchronizer
+    global robot, robot_connected, data_synchronizer, dead_reckoning
 
-    print(f'\n Connecting to ESP32 at {ESP32_HOST}:{ESP32_PORT}...')
+    print(f'\nConnecting to ESP32 at {ESP32_HOST}:{ESP32_PORT}...')
 
     try:
         robot = RobotLink(host=ESP32_HOST, port=ESP32_PORT)
@@ -82,6 +86,16 @@ def init_robot_connection():
         )
         print('✓ Data synchronizer initialized')
 
+        # Initialize motion model and dead reckoning (Phase 3)
+        robot_params = RobotParameters(
+            wheel_diameter=0.082,  # 82mm wheels
+            wheelbase=0.24,  # 240mm wheelbase
+            ticks_per_revolution=360
+        )
+        motion_model = DifferentialDriveModel(params=robot_params)
+        dead_reckoning = DeadReckoning(motion_model=motion_model)
+        print('✓ Dead reckoning initialized')
+
         robot_connected = True
         return True
 
@@ -93,7 +107,7 @@ def init_robot_connection():
 
 def esp32_communication_thread():
     """Background thread for ESP32 communication"""
-    global running, robot, robot_connected, odom_state, data_synchronizer
+    global running, robot, robot_connected, odom_state, data_synchronizer, dead_reckoning
 
     print('ESP32 communication thread started')
 
@@ -215,11 +229,11 @@ def esp32_communication_thread():
                         )
                         data_synchronizer.add_lidar_scan(lidar_scan_obj)
 
-                        # Try to get synced data (Phase 3+ will process this)
+                        # Try to get synced data (Phase 3: Dead Reckoning)
                         synced = data_synchronizer.get_synced_data()
-                        if synced:
-                            # TODO: Pass to SLAM algorithm (Phase 3+)
-                            pass
+                        if synced and dead_reckoning:
+                            # Update dead reckoning with interpolated odometry
+                            dead_reckoning.update(synced.odom_at_scan)
 
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('lidar_scan', {
@@ -233,7 +247,7 @@ def esp32_communication_thread():
                     import traceback
                     traceback.print_exc()
 
-            # Log synchronizer stats every 10 seconds
+            # Log synchronizer and dead reckoning stats every 10 seconds
             if data_synchronizer and (time.time() - last_stats_time) >= 10.0:
                 stats = data_synchronizer.get_stats()
                 print(f'\nSLAM Sync Stats: '
@@ -241,6 +255,17 @@ def esp32_communication_thread():
                       f'lidar_buf={stats["lidar_buffer_size"]}/{stats["lidar_buffer_capacity"]}, '
                       f'synced={stats["synced_generated"]}, '
                       f'failed={stats["interpolation_failed"]}')
+
+                # Log dead reckoning pose (Phase 3)
+                if dead_reckoning:
+                    pose = dead_reckoning.get_current_pose()
+                    state = dead_reckoning.get_state()
+                    print(f'Dead Reckoning: '
+                          f'pos=({pose.x:.3f}, {pose.y:.3f})m, '
+                          f'θ={np.rad2deg(pose.theta):.1f}°, '
+                          f'dist={state.total_distance:.2f}m, '
+                          f'updates={state.num_updates}')
+
                 last_stats_time = time.time()
 
         except Exception as e:

@@ -22,6 +22,8 @@ from .sensor_data import (
 )
 
 from .data_sync import DataSynchronizer
+from .motion_model import RobotParameters, DifferentialDriveModel
+from .dead_reckoning import DeadReckoning, DeadReckoningState
 
 __all__ = [
     'OdomReading',
@@ -30,4 +32,8 @@ __all__ = [
     'Pose',
     'SyncedData',
     'DataSynchronizer',
+    'RobotParameters',
+    'DifferentialDriveModel',
+    'DeadReckoning',
+    'DeadReckoningState',
 ]
