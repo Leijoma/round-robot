@@ -24,6 +24,8 @@ from .sensor_data import (
 from .data_sync import DataSynchronizer
 from .motion_model import RobotParameters, DifferentialDriveModel
 from .dead_reckoning import DeadReckoning, DeadReckoningState
+from .lidar_processing import LidarProcessor
+from .scan_matcher import ICPScanMatcher
 
 __all__ = [
     'OdomReading',
@@ -36,4 +38,6 @@ __all__ = [
     'DifferentialDriveModel',
     'DeadReckoning',
     'DeadReckoningState',
+    'LidarProcessor',
+    'ICPScanMatcher',
 ]
