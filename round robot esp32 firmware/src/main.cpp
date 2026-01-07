@@ -96,14 +96,7 @@ void setupArduino() {
   Serial.println("  RobotLink initialized");
   Serial.println("  Waiting 2 seconds for Arduino boot...");
   delay(2000);
-
-  // Auto-enable odometry streaming on startup
-  Serial.println("  Sending ENABLE_STREAM to Arduino...");
-  RobotLink::EnableStreamPayload enableCmd;
-  enableCmd.enable = 1;           // Enable streaming
-  enableCmd.intervalMs = 200;     // 200ms = 5 Hz
-  arduinoLink->sendFrame(RobotLink::MSG_ENABLE_STREAM, (uint8_t*)&enableCmd, sizeof(enableCmd));
-  Serial.println("  Odometry streaming enabled @ 200ms (5 Hz)");
+  Serial.println("  Arduino ready - waiting for host to enable streaming");
 }
 
 void setupUDP() {

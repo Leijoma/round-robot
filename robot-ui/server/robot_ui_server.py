@@ -62,10 +62,10 @@ def init_robot_connection():
         robot = RobotLink(host=ESP32_HOST, port=ESP32_PORT)
         time.sleep(0.5)
 
-        # Enable odometry streaming
-        robot.enable_stream(True, interval_ms=50)  # 20 Hz
+        # Enable odometry streaming at 10 Hz (100ms)
+        robot.enable_stream(True, interval_ms=100)  # 10 Hz
         print('✓ ESP32 connection established')
-        print('✓ Odometry streaming enabled (20 Hz)')
+        print('✓ Odometry streaming enabled (10 Hz @ 100ms interval)')
 
         robot_connected = True
         return True
@@ -107,7 +107,7 @@ def esp32_communication_thread():
                     odom_state['encoder_right_total'] += odom.delta_right
 
                     # Compute velocities from encoder deltas
-                    # At 20 Hz (50ms interval), delta is measured over ~0.05 seconds
+                    # At 10 Hz (100ms interval), delta is measured over ~0.1 seconds
                     if odom_state['last_timestamp'] > 0:
                         dt = (odom.timestamp - odom_state['last_timestamp']) / 1000.0  # Convert ms to seconds
                         if dt > 0:
