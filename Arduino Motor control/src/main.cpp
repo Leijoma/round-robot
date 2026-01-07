@@ -32,8 +32,8 @@ const uint8_t PIN_SOFT_TX = A1;  // Arduino TX -> ESP32 GPIO26 RX
 // ============================================================
 // Robot Configuration
 // ============================================================
-const float WHEEL_DIAMETER = 0.082f;   // meters
-const float WHEELBASE = 0.24f;         // meters
+const float WHEEL_DIAMETER = 0.082f;   // meters (82mm)
+const float WHEELBASE = 0.24f;         // meters (240mm, center-to-center, verified 2026-01-07)
 const float TICKS_PER_REV = 360.0f;    // encoder ticks per revolution
 const float METERS_PER_TICK = (PI * WHEEL_DIAMETER) / TICKS_PER_REV;
 
@@ -518,7 +518,7 @@ void setup() {
   delay(100);
 
   Serial.println(F("\n=== Arduino Motor Control Firmware ==="));
-  Serial.println(F("Version: 1.0"));
+  Serial.println(F("Version: 1.1"));
   Serial.println(F("Debug enabled on USB Serial (115200)"));
   Serial.println(F("RobotLink on SoftwareSerial A0/A1 (9600)"));
   Serial.println();

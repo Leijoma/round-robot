@@ -19,7 +19,7 @@ const uint16_t UDP_PORT = 5000;
 // LIDAR Configuration
 #define LIDAR_RX_PIN 16    // ESP32 RX <- Neato LIDAR TX (orange wire)
 #define LIDAR_PWM_PIN 21   // ESP32 PWM -> LIDAR Motor Control
-#define LIDAR_TARGET_RPM 220
+#define LIDAR_TARGET_RPM 240  // 4.0 Hz scan rate, 2.5:1 ratio with 10 Hz odometry
 
 // Global objects
 HardwareSerial arduinoSerial(1);
