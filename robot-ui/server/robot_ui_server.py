@@ -15,6 +15,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from robotlink import RobotLink, MessageType, OdomPayload, LidarScanPayload
 
+# SLAM imports (Phase 2)
+from slam.data_sync import DataSynchronizer
+from slam.sensor_data import OdomReading, LidarScan, LidarReading
+
 # Configuration
 ESP32_HOST = '192.168.68.52'
 ESP32_PORT = 5000
@@ -29,6 +33,9 @@ robot = None
 robot_connected = False
 running = False
 esp32_thread = None
+
+# SLAM state (Phase 2)
+data_synchronizer = None
 
 # Odometry state tracking
 odom_state = {
@@ -54,7 +61,7 @@ METERS_PER_TICK = (WHEEL_DIAMETER * 3.14159) / TICKS_PER_REV
 
 def init_robot_connection():
     """Initialize connection to ESP32"""
-    global robot, robot_connected
+    global robot, robot_connected, data_synchronizer
 
     print(f'\n Connecting to ESP32 at {ESP32_HOST}:{ESP32_PORT}...')
 
@@ -67,6 +74,14 @@ def init_robot_connection():
         print('✓ ESP32 connection established')
         print('✓ Odometry streaming enabled (10 Hz @ 100ms interval)')
 
+        # Initialize SLAM components (Phase 2)
+        data_synchronizer = DataSynchronizer(
+            odom_buffer_size=50,  # 5 seconds @ 10Hz
+            lidar_buffer_size=20,  # 5 seconds @ 4Hz
+            timeout_sec=1.0
+        )
+        print('✓ Data synchronizer initialized')
+
         robot_connected = True
         return True
 
@@ -78,9 +93,12 @@ def init_robot_connection():
 
 def esp32_communication_thread():
     """Background thread for ESP32 communication"""
-    global running, robot, robot_connected, odom_state
+    global running, robot, robot_connected, odom_state, data_synchronizer
 
     print('ESP32 communication thread started')
+
+    # Stats logging
+    last_stats_time = time.time()
 
     while running:
         if robot is None:
@@ -118,6 +136,20 @@ def esp32_communication_thread():
                             odom_state['vel_right'] = vel_right
 
                     odom_state['last_timestamp'] = odom.timestamp
+
+                    # Add to SLAM data synchronizer (Phase 2)
+                    if data_synchronizer:
+                        odom_reading = OdomReading(
+                            timestamp=odom.timestamp,
+                            delta_left=odom.delta_left,
+                            delta_right=odom.delta_right,
+                            x_mm=odom.x_mm,
+                            y_mm=odom.y_mm,
+                            theta_mrad=odom.theta_mrad,
+                            vel_left=odom_state['vel_left'],
+                            vel_right=odom_state['vel_right']
+                        )
+                        data_synchronizer.add_odometry(odom_reading)
 
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('odom_update', {
@@ -164,6 +196,31 @@ def esp32_communication_thread():
                         print(f'LIDAR: Scan #{esp32_communication_thread.lidar_scan_count} '
                               f'({valid_count}/{len(readings)} valid, RPM={lidar_scan.rpm})')
 
+                    # Add to SLAM data synchronizer (Phase 2)
+                    if data_synchronizer:
+                        lidar_readings = []
+                        for i, r in enumerate(lidar_scan.readings):
+                            angle = (lidar_scan.start_angle + i) % 360
+                            lidar_readings.append(LidarReading(
+                                angle_deg=angle,
+                                distance_mm=r.distance_mm,
+                                signal_strength=r.signal_strength,
+                                valid=not r.invalid
+                            ))
+
+                        lidar_scan_obj = LidarScan(
+                            timestamp=lidar_scan.timestamp,
+                            rpm=lidar_scan.rpm,
+                            readings=lidar_readings
+                        )
+                        data_synchronizer.add_lidar_scan(lidar_scan_obj)
+
+                        # Try to get synced data (Phase 3+ will process this)
+                        synced = data_synchronizer.get_synced_data()
+                        if synced:
+                            # TODO: Pass to SLAM algorithm (Phase 3+)
+                            pass
+
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('lidar_scan', {
                         'timestamp': lidar_scan.timestamp,
@@ -175,6 +232,16 @@ def esp32_communication_thread():
                     print(f'Error parsing LIDAR scan: {e}')
                     import traceback
                     traceback.print_exc()
+
+            # Log synchronizer stats every 10 seconds
+            if data_synchronizer and (time.time() - last_stats_time) >= 10.0:
+                stats = data_synchronizer.get_stats()
+                print(f'\nSLAM Sync Stats: '
+                      f'odom_buf={stats["odom_buffer_size"]}/{stats["odom_buffer_capacity"]}, '
+                      f'lidar_buf={stats["lidar_buffer_size"]}/{stats["lidar_buffer_capacity"]}, '
+                      f'synced={stats["synced_generated"]}, '
+                      f'failed={stats["interpolation_failed"]}')
+                last_stats_time = time.time()
 
         except Exception as e:
             print(f'Error in ESP32 thread: {e}')
