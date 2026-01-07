@@ -16,11 +16,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from robotlink import RobotLink, MessageType, OdomPayload, LidarScanPayload
 
-# SLAM imports (Phase 2 & 3)
+# SLAM imports (Phase 2, 3, & 4 Integration)
 from slam.data_sync import DataSynchronizer
 from slam.sensor_data import OdomReading, LidarScan, LidarReading
-from slam.motion_model import DifferentialDriveModel, RobotParameters
-from slam.dead_reckoning import DeadReckoning
+from slam.motion_model import RobotParameters
+from slam.localization import IntegratedLocalizer
 
 # Configuration
 ESP32_HOST = '192.168.68.52'
@@ -37,9 +37,9 @@ robot_connected = False
 running = False
 esp32_thread = None
 
-# SLAM state (Phase 2 & 3)
+# SLAM state (Phase 2, 3, & 4 Integration)
 data_synchronizer = None
-dead_reckoning = None
+localizer = None  # Integrated localizer (dead reckoning + ICP)
 
 # Odometry state tracking
 odom_state = {
@@ -65,7 +65,7 @@ METERS_PER_TICK = (WHEEL_DIAMETER * 3.14159) / TICKS_PER_REV
 
 def init_robot_connection():
     """Initialize connection to ESP32"""
-    global robot, robot_connected, data_synchronizer, dead_reckoning
+    global robot, robot_connected, data_synchronizer, localizer
 
     print(f'\nConnecting to ESP32 at {ESP32_HOST}:{ESP32_PORT}...')
 
@@ -86,15 +86,14 @@ def init_robot_connection():
         )
         print('✓ Data synchronizer initialized')
 
-        # Initialize motion model and dead reckoning (Phase 3)
+        # Initialize integrated localizer (Phase 3 & 4)
         robot_params = RobotParameters(
             wheel_diameter=0.082,  # 82mm wheels
             wheelbase=0.24,  # 240mm wheelbase
             ticks_per_revolution=360
         )
-        motion_model = DifferentialDriveModel(params=robot_params)
-        dead_reckoning = DeadReckoning(motion_model=motion_model)
-        print('✓ Dead reckoning initialized')
+        localizer = IntegratedLocalizer(robot_params=robot_params)
+        print('✓ Integrated localizer initialized (dead reckoning + ICP)')
 
         robot_connected = True
         return True
@@ -107,7 +106,7 @@ def init_robot_connection():
 
 def esp32_communication_thread():
     """Background thread for ESP32 communication"""
-    global running, robot, robot_connected, odom_state, data_synchronizer, dead_reckoning
+    global running, robot, robot_connected, odom_state, data_synchronizer, localizer
 
     print('ESP32 communication thread started')
 
@@ -151,8 +150,8 @@ def esp32_communication_thread():
 
                     odom_state['last_timestamp'] = odom.timestamp
 
-                    # Add to SLAM data synchronizer (Phase 2)
-                    if data_synchronizer:
+                    # Add to SLAM data synchronizer (Phase 2) and localizer (Phase 4)
+                    if data_synchronizer and localizer:
                         odom_reading = OdomReading(
                             timestamp=odom.timestamp,
                             delta_left=odom.delta_left,
@@ -164,6 +163,7 @@ def esp32_communication_thread():
                             vel_right=odom_state['vel_right']
                         )
                         data_synchronizer.add_odometry(odom_reading)
+                        localizer.update_odometry(odom_reading)
 
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('odom_update', {
@@ -229,11 +229,18 @@ def esp32_communication_thread():
                         )
                         data_synchronizer.add_lidar_scan(lidar_scan_obj)
 
-                        # Try to get synced data (Phase 3: Dead Reckoning)
-                        synced = data_synchronizer.get_synced_data()
-                        if synced and dead_reckoning:
-                            # Update dead reckoning with interpolated odometry
-                            dead_reckoning.update(synced.odom_at_scan)
+                        # Update integrated localizer with scan (Phase 4 Integration)
+                        if localizer:
+                            corrected_pose, icp_success, match_info = localizer.update_scan(lidar_scan_obj)
+
+                            # Log ICP match results (throttled)
+                            if icp_success and esp32_communication_thread.lidar_scan_count % 10 == 0:
+                                transform = match_info['transform']
+                                quality = match_info['quality']
+                                print(f'  ICP: dx={transform[0]:.3f}m, dy={transform[1]:.3f}m, '
+                                      f'dθ={np.rad2deg(transform[2]):.1f}°, '
+                                      f'err={match_info["error"]:.4f}m, '
+                                      f'corresp={quality["correspondence_ratio"]:.1%}')
 
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('lidar_scan', {
@@ -247,7 +254,7 @@ def esp32_communication_thread():
                     import traceback
                     traceback.print_exc()
 
-            # Log synchronizer and dead reckoning stats every 10 seconds
+            # Log synchronizer and localization stats every 10 seconds
             if data_synchronizer and (time.time() - last_stats_time) >= 10.0:
                 stats = data_synchronizer.get_stats()
                 print(f'\nSLAM Sync Stats: '
@@ -256,15 +263,25 @@ def esp32_communication_thread():
                       f'synced={stats["synced_generated"]}, '
                       f'failed={stats["interpolation_failed"]}')
 
-                # Log dead reckoning pose (Phase 3)
-                if dead_reckoning:
-                    pose = dead_reckoning.get_current_pose()
-                    state = dead_reckoning.get_state()
-                    print(f'Dead Reckoning: '
-                          f'pos=({pose.x:.3f}, {pose.y:.3f})m, '
-                          f'θ={np.rad2deg(pose.theta):.1f}°, '
-                          f'dist={state.total_distance:.2f}m, '
-                          f'updates={state.num_updates}')
+                # Log integrated localization stats (Phase 4)
+                if localizer:
+                    loc_stats = localizer.get_statistics()
+                    dr_pose = localizer.get_dead_reckoning_pose()
+                    corr_pose = localizer.get_corrected_pose()
+
+                    print(f'Dead Reckoning Pose: '
+                          f'pos=({dr_pose.x:.3f}, {dr_pose.y:.3f})m, '
+                          f'θ={np.rad2deg(dr_pose.theta):.1f}°, '
+                          f'dist={loc_stats["total_distance_traveled"]:.2f}m')
+
+                    print(f'ICP-Corrected Pose: '
+                          f'pos=({corr_pose.x:.3f}, {corr_pose.y:.3f})m, '
+                          f'θ={np.rad2deg(corr_pose.theta):.1f}°')
+
+                    print(f'ICP Stats: '
+                          f'scans={loc_stats["scans_processed"]}, '
+                          f'success_rate={loc_stats["icp_success_rate"]:.1%}, '
+                          f'drift={loc_stats["current_drift"]["distance_drift"]:.3f}m')
 
                 last_stats_time = time.time()
 
