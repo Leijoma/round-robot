@@ -210,15 +210,11 @@ function renderLidarPlot() {
             const x = centerX + r * Math.cos(angleRad);
             const y = centerY + r * Math.sin(angleRad);
 
-            // Color based on distance (green = close, red = far)
-            const normalizedDist = Math.min(distance / maxDistance, 1);
-            const red = Math.floor(normalizedDist * 255);
-            const green = Math.floor((1 - normalizedDist) * 255);
-
+            // All points in green
             // Size based on signal strength
             const pointSize = 2 + (strength / 16384) * 2; // Assuming max strength ~16384
 
-            ctx.fillStyle = `rgb(${red}, ${green}, 50)`;
+            ctx.fillStyle = '#00ff00';  // Green
             ctx.beginPath();
             ctx.arc(x, y, pointSize, 0, 2 * Math.PI);
             ctx.fill();
