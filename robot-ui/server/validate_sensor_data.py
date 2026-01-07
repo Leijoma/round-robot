@@ -150,7 +150,7 @@ class SensorValidator:
                             'wall_time': wall_time,
                             'timestamp': lidar_scan.timestamp,
                             'rpm': lidar_scan.rpm,
-                            'num_readings': lidar_scan.num_readings,
+                            'num_readings': len(lidar_scan.readings),
                             'start_angle': lidar_scan.start_angle
                         })
 
