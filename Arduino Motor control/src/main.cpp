@@ -70,6 +70,9 @@ float currentVelRight = 0;
 int16_t pwmLeft = 0;
 int16_t pwmRight = 0;
 
+// Heading hold gain (for straight-line correction)
+const float HEADING_HOLD_KP = 0.5f;  // Start conservative, tune if needed
+
 // Odometry pose
 int32_t pose_x_mm = 0;
 int32_t pose_y_mm = 0;
@@ -202,10 +205,31 @@ void updateControl(float dt) {
   // Calculate velocities
   updateVelocities(dt);
 
-  // Update PID controllers with minimum velocity threshold
-  // Threshold at 0.08 m/s to avoid unstable low-speed regime
-  float pwmLf = pidLeft.update(currentVelLeft, targetVelLeft, dt);
-  float pwmRf = pidRight.update(currentVelRight, targetVelRight, dt);
+  // Detect if we're trying to drive straight (both targets equal and non-zero)
+  bool wantStraight = (targetVelLeft == targetVelRight) && (abs(targetVelLeft) > 0.05f);
+
+  // If driving straight, apply heading hold correction
+  float correctedTargetLeft = targetVelLeft;
+  float correctedTargetRight = targetVelRight;
+
+  if (wantStraight) {
+    // Calculate actual angular velocity: ω = (v_right - v_left) / wheelbase
+    float actualAngularVel = (currentVelRight - currentVelLeft) / WHEELBASE;
+
+    // We want angular velocity to be zero for straight line
+    float angularError = 0.0f - actualAngularVel;
+
+    // Calculate velocity correction (m/s)
+    float velocityCorrection = HEADING_HOLD_KP * angularError * (WHEELBASE / 2.0f);
+
+    // Apply correction: if turning right (ω > 0), slow down right wheel, speed up left
+    correctedTargetLeft = targetVelLeft - velocityCorrection;
+    correctedTargetRight = targetVelRight + velocityCorrection;
+  }
+
+  // Update PID controllers with (possibly corrected) targets
+  float pwmLf = pidLeft.update(currentVelLeft, correctedTargetLeft, dt);
+  float pwmRf = pidRight.update(currentVelRight, correctedTargetRight, dt);
 
   // Convert to int16 and apply
   int16_t pwmL = (int16_t)pwmLf;
@@ -227,7 +251,14 @@ void updateControl(float dt) {
     Serial.print(pwmL);
     Serial.print(F(","));
     Serial.print(pwmR);
-    Serial.println(F("]"));
+    Serial.print(F("]"));
+    if (wantStraight) {
+      float actualAngularVel = (currentVelRight - currentVelLeft) / WHEELBASE;
+      Serial.print(F(" ω="));
+      Serial.print(actualAngularVel, 3);
+      Serial.print(F(" rad/s"));
+    }
+    Serial.println();
   }
 
   setMotors(pwmL, pwmR);
