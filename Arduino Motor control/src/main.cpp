@@ -3,6 +3,9 @@
 #include <SoftwareSerial.h>
 #include "RobotLink.h"
 #include "RobotLinkMessages.h"
+#include <Encoder.h>
+#include <MotorControl.h>
+#include <PIDController.h>
 
 // ============================================================
 // Hardware Pin Definitions (Monster Moto Shield + Encoders)
@@ -34,106 +37,23 @@ const uint8_t PIN_SOFT_TX = A1;  // Arduino TX -> ESP32 GPIO26 RX
 // ============================================================
 const float WHEEL_DIAMETER = 0.0825f;  // meters (82.5mm, measured)
 const float WHEELBASE = 0.244f;        // meters (244mm, measured physical wheelbase)
-const float TICKS_PER_REV = 310.0f;    // encoder ticks per revolution (NEEDS CALIBRATION!)
+const float TICKS_PER_REV = 714.0f;    // encoder ticks per revolution (CHANGE mode, 2X decoding, calibrated)
 const float METERS_PER_TICK = (PI * WHEEL_DIAMETER) / TICKS_PER_REV;
 
+// PID Controller from library
+
 // ============================================================
-// PID Controller Class with Deadband Compensation
+// Library Objects - Motors, Encoders, PID
 // ============================================================
-class PIDController {
-public:
-  float Kp, Ki, Kd;
-  float deadbandForward;   // PWM offset for forward motion
-  float deadbandReverse;   // PWM offset for reverse motion
-
-  PIDController() : Kp(10.0f), Ki(5.0f), Kd(2.0f),
-                    deadbandForward(30.0f), deadbandReverse(30.0f),
-                    _integral(0), _prevError(0), _prevVel(0) {}
-
-  // Update PID controller
-  // vel: current velocity (m/s)
-  // target: target velocity (m/s)
-  // dt: time delta (seconds)
-  // min_threshold: minimum velocity threshold (m/s)
-  // Returns: PWM output (-255 to +255)
-  float update(float vel, float target, float dt, float min_threshold = 0.0f) {
-    if (dt <= 0) return 0;
-
-    // Minimum velocity threshold check
-    // If target is below threshold, stop motor and reset integral
-    // This ensures synchronized stop and avoids unstable low-speed regime
-    if (fabs(target) < min_threshold) {
-      _integral = 0;
-      _prevVel = 0;
-      return 0;
-    }
-
-    // Error calculation
-    float error = target - vel;
-
-    // Proportional term
-    float pTerm = Kp * error;
-
-    // Integral term with anti-windup
-    _integral += error * dt;
-    const float MAX_INTEGRAL = 100.0f;
-    if (_integral > MAX_INTEGRAL) _integral = MAX_INTEGRAL;
-    if (_integral < -MAX_INTEGRAL) _integral = -MAX_INTEGRAL;
-    float iTerm = Ki * _integral;
-
-    // Derivative term (on error to provide startup boost)
-    // This creates "derivative kick" when command changes suddenly
-    // Helps overcome static friction at motor startup
-    float derivative = (error - _prevError) / dt;
-    float dTerm = Kd * derivative;
-
-    _prevVel = vel;
-    _prevError = error;
-
-    // Calculate raw PWM
-    float pwm = pTerm + iTerm + dTerm;
-
-    // Apply deadband compensation
-    // Note: Deadband helps overcome static friction at start
-    // After motor is running, PWM can go below deadband (dynamic friction < static)
-    if (target > 0.001f) {
-      // Moving forward
-      pwm += deadbandForward;
-    } else if (target < -0.001f) {
-      // Moving backward
-      pwm -= deadbandReverse;
-    } else {
-      // Target is zero - stop and reset integral
-      _integral = 0;
-      return 0;
-    }
-
-    // Clamp to PWM range
-    if (pwm > 255.0f) pwm = 255.0f;
-    if (pwm < -255.0f) pwm = -255.0f;
-
-    return pwm;
-  }
-
-  void reset() {
-    _integral = 0;
-    _prevError = 0;
-    _prevVel = 0;
-  }
-
-private:
-  float _integral;
-  float _prevError;
-  float _prevVel;
-};
+// Direction settings verified through motor_encoder_test.cpp
+Encoder encoderLeft(PIN_ENC_L_A, PIN_ENC_L_B, true);    // Reversed
+Encoder encoderRight(PIN_ENC_R_A, PIN_ENC_R_B, true);   // Reversed
+MotorControl motorLeft(PIN_M1_INA, PIN_M1_INB, PIN_M1_PWM, true);   // Reversed
+MotorControl motorRight(PIN_M2_INA, PIN_M2_INB, PIN_M2_PWM, false); // Normal
 
 // ============================================================
 // Global Variables
 // ============================================================
-// Encoder counts (volatile for ISR access)
-volatile int32_t encoderLeftCount = 0;
-volatile int32_t encoderRightCount = 0;
-
 // PID Controllers
 PIDController pidLeft;
 PIDController pidRight;
@@ -181,56 +101,24 @@ bool streamEnabled = false;
 uint16_t streamInterval = 50;  // ms
 
 // ============================================================
-// Encoder Interrupt Service Routines - Simple 2X Decoding
+// Encoder Interrupt Service Routines - 2X Decoding with XOR Logic
 // ============================================================
 void isrEncoderLeft() {
-  // Read direction from B channel when A changes
-  bool b = digitalRead(PIN_ENC_L_B);
-  if (b) {
-    encoderLeftCount++;  // Inverted in software (was --)
-  } else {
-    encoderLeftCount--;  // Inverted in software (was ++)
-  }
+    encoderLeft.handleInterrupt();
 }
 
 void isrEncoderRight() {
-  // Read direction from B channel when A changes
-  bool b = digitalRead(PIN_ENC_R_B);
-  if (b) {
-    encoderRightCount++;  // Inverted in software (was --)
-  } else {
-    encoderRightCount--;  // Inverted in software (was ++)
-  }
+    encoderRight.handleInterrupt();
 }
 
 // ============================================================
 // Motor Control Functions
 // ============================================================
-void setMotor(uint8_t pinINA, uint8_t pinINB, uint8_t pinPWM, int16_t pwm) {
-  if (pwm > 0) {
-    // Forward
-    digitalWrite(pinINA, HIGH);
-    digitalWrite(pinINB, LOW);
-    analogWrite(pinPWM, constrain(pwm, 0, 255));
-  } else if (pwm < 0) {
-    // Backward
-    digitalWrite(pinINA, LOW);
-    digitalWrite(pinINB, HIGH);
-    analogWrite(pinPWM, constrain(-pwm, 0, 255));
-  } else {
-    // Stop
-    digitalWrite(pinINA, LOW);
-    digitalWrite(pinINB, LOW);
-    analogWrite(pinPWM, 0);
-  }
-}
-
 void setMotors(int16_t left, int16_t right) {
-  pwmLeft = -left;   // Left motor IS inverted (hardware wiring)
-  pwmRight = right;  // Right motor NOT inverted
-
-  setMotor(PIN_M1_INA, PIN_M1_INB, PIN_M1_PWM, pwmLeft);
-  setMotor(PIN_M2_INA, PIN_M2_INB, PIN_M2_PWM, pwmRight);
+    motorLeft.setPWM(left);
+    motorRight.setPWM(right);
+    pwmLeft = left;
+    pwmRight = right;
 }
 
 void stopMotors() {
@@ -247,8 +135,8 @@ void stopMotors() {
 void updateVelocities(float dt) {
   // Get current encoder counts atomically
   noInterrupts();
-  int32_t encL = encoderLeftCount;
-  int32_t encR = encoderRightCount;
+  int32_t encL = encoderLeft.getCount();
+  int32_t encR = encoderRight.getCount();
   interrupts();
 
   // Calculate delta ticks
@@ -273,8 +161,8 @@ static int32_t prevOdomEncoderRight = 0;
 void updateOdometry(float dt) {
   // Get current encoder counts
   noInterrupts();
-  int32_t encL = encoderLeftCount;
-  int32_t encR = encoderRightCount;
+  int32_t encL = encoderLeft.getCount();
+  int32_t encR = encoderRight.getCount();
   interrupts();
 
   // Calculate DELTA ticks since last odometry update
@@ -316,8 +204,8 @@ void updateControl(float dt) {
 
   // Update PID controllers with minimum velocity threshold
   // Threshold at 0.08 m/s to avoid unstable low-speed regime
-  float pwmLf = pidLeft.update(currentVelLeft, targetVelLeft, dt, MIN_VELOCITY_THRESHOLD);
-  float pwmRf = pidRight.update(currentVelRight, targetVelRight, dt, MIN_VELOCITY_THRESHOLD);
+  float pwmLf = pidLeft.update(currentVelLeft, targetVelLeft, dt);
+  float pwmRf = pidRight.update(currentVelRight, targetVelRight, dt);
 
   // Convert to int16 and apply
   int16_t pwmL = (int16_t)pwmLf;
@@ -379,10 +267,10 @@ void saveConfig() {
   cfg.Kp = pidLeft.Kp;
   cfg.Ki = pidLeft.Ki;
   cfg.Kd = pidLeft.Kd;
-  cfg.deadbandLeftFwd = pidLeft.deadbandForward;
-  cfg.deadbandLeftRev = pidLeft.deadbandReverse;
-  cfg.deadbandRightFwd = pidRight.deadbandForward;
-  cfg.deadbandRightRev = pidRight.deadbandReverse;
+  cfg.deadbandLeftFwd = pidLeft.deadband_forward;
+  cfg.deadbandLeftRev = pidLeft.deadband_reverse;
+  cfg.deadbandRightFwd = pidRight.deadband_forward;
+  cfg.deadbandRightRev = pidRight.deadband_reverse;
   cfg.wheelDiameter = WHEEL_DIAMETER;
   cfg.wheelbase = WHEELBASE;
   cfg.ticksPerRev = TICKS_PER_REV;
@@ -409,10 +297,10 @@ bool loadConfig() {
   pidLeft.Kp = pidRight.Kp = cfg.Kp;
   pidLeft.Ki = pidRight.Ki = cfg.Ki;
   pidLeft.Kd = pidRight.Kd = cfg.Kd;
-  pidLeft.deadbandForward = cfg.deadbandLeftFwd;
-  pidLeft.deadbandReverse = cfg.deadbandLeftRev;
-  pidRight.deadbandForward = cfg.deadbandRightFwd;
-  pidRight.deadbandReverse = cfg.deadbandRightRev;
+  pidLeft.deadband_forward = cfg.deadbandLeftFwd;
+  pidLeft.deadband_reverse = cfg.deadbandLeftRev;
+  pidRight.deadband_forward = cfg.deadbandRightFwd;
+  pidRight.deadband_reverse = cfg.deadbandRightRev;
 
   return true;
 }
@@ -479,10 +367,10 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
       if (len != sizeof(RobotLink::SetDeadbandPayload)) break;
 
       RobotLink::SetDeadbandPayload* msg = (RobotLink::SetDeadbandPayload*)payload;
-      pidLeft.deadbandForward = msg->leftForward;
-      pidLeft.deadbandReverse = msg->leftReverse;
-      pidRight.deadbandForward = msg->rightForward;
-      pidRight.deadbandReverse = msg->rightReverse;
+      pidLeft.deadband_forward = msg->leftForward;
+      pidLeft.deadband_reverse = msg->leftReverse;
+      pidRight.deadband_forward = msg->rightForward;
+      pidRight.deadband_reverse = msg->rightReverse;
 
       // Auto-save to EEPROM when updated from server
       saveConfig();
@@ -501,8 +389,8 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
 
     case RobotLink::MSG_ZERO_ENCODERS: {
       noInterrupts();
-      encoderLeftCount = 0;
-      encoderRightCount = 0;
+      encoderLeft.reset();
+      encoderRight.reset();
       interrupts();
 
       prevEncoderLeft = 0;
@@ -526,8 +414,8 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
       pose_x_mm = 0;
       pose_y_mm = 0;
       pose_th_mrad = 0;
-      prevOdomEncoderLeft = encoderLeftCount;
-      prevOdomEncoderRight = encoderRightCount;
+      prevOdomEncoderLeft = encoderLeft.getCount();
+      prevOdomEncoderRight = encoderRight.getCount();
       Serial.println(F("Pose reset to origin"));
       break;
     }
@@ -581,10 +469,10 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
       writeFloat(pidLeft.Kd);
 
       // Deadband values (16 bytes)
-      writeFloat(pidLeft.deadbandForward);
-      writeFloat(pidLeft.deadbandReverse);
-      writeFloat(pidRight.deadbandForward);
-      writeFloat(pidRight.deadbandReverse);
+      writeFloat(pidLeft.deadband_forward);
+      writeFloat(pidLeft.deadband_reverse);
+      writeFloat(pidRight.deadband_forward);
+      writeFloat(pidRight.deadband_reverse);
 
       // Flags (2 bytes)
       payload[offset++] = 1;  // pid_enabled (always on in current firmware)
@@ -619,8 +507,8 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
 void sendOdometry() {
   // Get current encoder counts atomically
   noInterrupts();
-  int32_t encL = encoderLeftCount;
-  int32_t encR = encoderRightCount;
+  int32_t encL = encoderLeft.getCount();
+  int32_t encR = encoderRight.getCount();
   interrupts();
 
   // Calculate delta ticks since last send
@@ -679,11 +567,37 @@ void setup() {
   pinMode(PIN_ENC_R_A, INPUT_PULLUP);
   pinMode(PIN_ENC_R_B, INPUT_PULLUP);
 
-  // Attach interrupts for 2X quadrature decoding
-  // CHANGE on channel A triggers interrupt, read B for direction
+  // Attach interrupts for 2X quadrature decoding with XOR logic
+  // CHANGE mode triggers on both RISING and FALLING edges of channel A
+  // Read both A and B in ISR to determine direction correctly
   // Arduino Uno: pins 2,3 support interrupts
   attachInterrupt(digitalPinToInterrupt(PIN_ENC_L_A), isrEncoderLeft, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_ENC_R_A), isrEncoderRight, CHANGE);
+
+  // Initialize motors
+  motorLeft.begin();
+  motorRight.begin();
+
+  // Apply TUNED PID parameters (from systematic tuning)
+  // Left motor: Higher Ki and deadband due to higher static friction
+  pidLeft.Kp = 50.0f;
+  pidLeft.Ki = 60.0f;  // 3x higher than right - compensates for deadband overshoot
+  pidLeft.Kd = 0.0f;
+  pidLeft.deadband_forward = 50.0f;
+  pidLeft.deadband_reverse = 50.0f;
+  pidLeft.filter_alpha = 0.3f;
+  pidLeft.output_min = -255.0f;
+  pidLeft.output_max = 255.0f;
+
+  // Right motor: Standard settings work well
+  pidRight.Kp = 50.0f;
+  pidRight.Ki = 20.0f;
+  pidRight.Kd = 0.0f;
+  pidRight.deadband_forward = 35.0f;
+  pidRight.deadband_reverse = 35.0f;
+  pidRight.filter_alpha = 0.3f;
+  pidRight.output_min = -255.0f;
+  pidRight.output_max = 255.0f;
 
   // Initialize motors to stopped state
   stopMotors();
@@ -700,8 +614,8 @@ void setup() {
 
   // Override left motor deadband - left motor has higher friction
   // 44 - lower to allow better speed control (left motor efficient when running)
-  pidLeft.deadbandForward = 44.0f;
-  pidLeft.deadbandReverse = 44.0f;
+  pidLeft.deadband_forward = 44.0f;
+  pidLeft.deadband_reverse = 44.0f;
   Serial.println(F("✓ Left motor deadband set to 44 (better control)"));
 
   // Override Kd for startup boost (D-term on error provides initial kick)
@@ -718,11 +632,11 @@ void setup() {
   Serial.print(F(", Ki=")); Serial.print(pidLeft.Ki);
   Serial.print(F(", Kd=")); Serial.println(pidLeft.Kd);
 
-  Serial.print(F("Deadband Left:  Fwd=")); Serial.print(pidLeft.deadbandForward);
-  Serial.print(F(", Rev=")); Serial.println(pidLeft.deadbandReverse);
+  Serial.print(F("Deadband Left:  Fwd=")); Serial.print(pidLeft.deadband_forward);
+  Serial.print(F(", Rev=")); Serial.println(pidLeft.deadband_reverse);
 
-  Serial.print(F("Deadband Right: Fwd=")); Serial.print(pidRight.deadbandForward);
-  Serial.print(F(", Rev=")); Serial.println(pidRight.deadbandReverse);
+  Serial.print(F("Deadband Right: Fwd=")); Serial.print(pidRight.deadband_forward);
+  Serial.print(F(", Rev=")); Serial.println(pidRight.deadband_reverse);
   Serial.println();
 
   // Initialize RobotLink protocol on SoftwareSerial
