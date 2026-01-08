@@ -1,19 +1,19 @@
 # Round Robot Project - Current Status
 
-**Last Updated**: 2026-01-08
+**Last Updated**: 2026-01-08 15:12
 
 ---
 
 ## 📊 Current Phase
 
 **Phase 1**: Sensor Optimization & Motor Synchronization
-**Active Story**: 1.7 (Complete) / 1.8 (Testing)
+**Active Story**: 1.8 (Testing Complete) / Ready for 1.1-1.5
 
 ---
 
 ## ✅ Recently Completed
 
-### 2026-01-08: Per-Motor PID Configuration (Story 1.7)
+### 2026-01-08: Per-Motor PID Configuration & Testing (Stories 1.7-1.8)
 - ✅ Implemented per-motor PID parameters with EEPROM persistence
 - ✅ Updated EEPROM structure to version 2 (separate left/right PID values)
 - ✅ Added MSG_SET_PID_PER_MOTOR (0x1C) protocol message
@@ -22,8 +22,9 @@
   - Left motor: Kp=50, Ki=60, Kd=0, Deadband=50 PWM
   - Right motor: Kp=50, Ki=20, Kd=0, Deadband=35 PWM
 - ✅ Added UI controls for per-motor PID tuning
+- ✅ **Firmware uploaded and tested - robot control working!**
 - ✅ Memory usage: 49.0% Flash, 26.2% RAM
-- ✅ Committed: 412bebb "Add per-motor PID configuration with EEPROM persistence"
+- ✅ Committed: 412bebb, ec73f53
 
 ### 2026-01-07: PID Library Integration
 - ✅ Integrated modular PID velocity control libraries into main firmware
