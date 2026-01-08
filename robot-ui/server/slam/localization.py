@@ -129,6 +129,19 @@ class IntegratedLocalizer:
         """
         self.num_scans_processed += 1
 
+        # Check if robot is moving (skip ICP if stationary to avoid spurious matches)
+        dr_state = self.dead_reckoning.get_state()
+        if dr_state.last_odom is not None:
+            vel_avg = (abs(dr_state.last_odom.vel_left) + abs(dr_state.last_odom.vel_right)) / 2.0
+            if vel_avg < 0.02:  # Less than 2 cm/s - consider stationary
+                match_info = {
+                    'success': False,
+                    'reason': 'robot_stationary',
+                    'velocity': vel_avg
+                }
+                self.num_icp_failures += 1
+                return self.corrected_pose, False, match_info
+
         # Filter scan
         filtered_scan = self.lidar_processor.filter_scan(scan)
 

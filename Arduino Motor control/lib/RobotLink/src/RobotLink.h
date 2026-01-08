@@ -36,6 +36,7 @@ enum MsgType : uint8_t {
   MSG_LOAD_CONFIG  = 0x18,  // Load config from EEPROM
   MSG_ZERO_ENCODERS = 0x19, // Zero encoder counts
   MSG_STOP         = 0x1A,  // Emergency stop
+  MSG_RESET_POSE   = 0x1B,  // Reset pose to (0, 0, 0) without zeroing encoders
 
   // Lidar message types (ESP32 -> Host)
   MSG_LIDAR_SCAN   = 0x20,  // Complete 360° scan data

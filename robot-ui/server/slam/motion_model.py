@@ -5,14 +5,17 @@ Implements forward and inverse kinematics for a differential drive robot.
 Handles straight line motion, curved motion, and motion uncertainty.
 
 Physical Parameters (from robot specifications):
-- Wheel diameter: 82mm
-- Wheelbase (distance between wheels): 240mm
+- Wheel diameter: 80mm
+- Wheelbase (distance between wheels): 244mm
 - Encoder ticks per revolution: 360
+- LIDAR offset: 10mm forward from wheel axle centerline
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Dict
+import json
+import os
 
 try:
     from .sensor_data import Pose
@@ -28,10 +31,14 @@ class RobotParameters:
         wheel_diameter: Diameter of drive wheels in meters
         wheelbase: Distance between left and right wheels in meters
         ticks_per_revolution: Encoder ticks per wheel revolution
+        lidar_offset_x: LIDAR offset forward from wheel axle (meters, positive = forward)
+        lidar_offset_y: LIDAR offset lateral from centerline (meters, positive = right)
     """
-    wheel_diameter: float = 0.082  # meters (82mm)
-    wheelbase: float = 0.24  # meters (240mm)
+    wheel_diameter: float = 0.080  # meters (80mm)
+    wheelbase: float = 0.244  # meters (244mm)
     ticks_per_revolution: int = 360
+    lidar_offset_x: float = 0.010  # meters (10mm forward)
+    lidar_offset_y: float = 0.0  # meters (centered laterally)
 
     @property
     def wheel_radius(self) -> float:
@@ -52,11 +59,74 @@ class RobotParameters:
         circumference = np.pi * self.wheel_diameter
         return circumference / self.ticks_per_revolution
 
+    def to_dict(self) -> Dict:
+        """Convert to dictionary for JSON serialization
+
+        Returns:
+            Dictionary representation
+        """
+        return {
+            'wheel_diameter': self.wheel_diameter,
+            'wheelbase': self.wheelbase,
+            'ticks_per_revolution': self.ticks_per_revolution,
+            'lidar_offset_x': self.lidar_offset_x,
+            'lidar_offset_y': self.lidar_offset_y,
+            'wheel_diameter_mm': self.wheel_diameter * 1000,
+            'wheelbase_mm': self.wheelbase * 1000,
+            'lidar_offset_x_mm': self.lidar_offset_x * 1000,
+            'lidar_offset_y_mm': self.lidar_offset_y * 1000,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'RobotParameters':
+        """Create from dictionary
+
+        Args:
+            data: Dictionary with parameters
+
+        Returns:
+            RobotParameters instance
+        """
+        return cls(
+            wheel_diameter=data.get('wheel_diameter', 0.080),
+            wheelbase=data.get('wheelbase', 0.244),
+            ticks_per_revolution=data.get('ticks_per_revolution', 360),
+            lidar_offset_x=data.get('lidar_offset_x', 0.010),
+            lidar_offset_y=data.get('lidar_offset_y', 0.0),
+        )
+
+    def save(self, filepath: str) -> None:
+        """Save parameters to JSON file
+
+        Args:
+            filepath: Path to save file
+        """
+        with open(filepath, 'w') as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def load(cls, filepath: str) -> 'RobotParameters':
+        """Load parameters from JSON file
+
+        Args:
+            filepath: Path to load from
+
+        Returns:
+            RobotParameters instance
+        """
+        if not os.path.exists(filepath):
+            return cls()  # Return defaults if file doesn't exist
+
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        return cls.from_dict(data)
+
     def __repr__(self) -> str:
         return (f"RobotParameters(wheel_dia={self.wheel_diameter*1000:.1f}mm, "
                 f"wheelbase={self.wheelbase*1000:.0f}mm, "
                 f"ticks/rev={self.ticks_per_revolution}, "
-                f"dist/tick={self.distance_per_tick*1000:.3f}mm)")
+                f"dist/tick={self.distance_per_tick*1000:.3f}mm, "
+                f"lidar_offset=({self.lidar_offset_x*1000:.1f}, {self.lidar_offset_y*1000:.1f})mm)")
 
 
 class DifferentialDriveModel:
@@ -108,7 +178,7 @@ class DifferentialDriveModel:
 
         # Calculate linear and angular displacement
         d_center = (d_left + d_right) / 2.0  # Distance traveled by robot center
-        d_theta = (d_right - d_left) / self.params.wheelbase  # Change in heading
+        d_theta = (d_right - d_left) / self.params.wheelbase  # Change in heading (positive = left/CCW)
 
         # Handle two cases: straight line vs curved motion
         if abs(d_theta) < 1e-6:  # Straight line motion (threshold: ~0.0001 radians)

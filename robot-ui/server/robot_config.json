@@ -1,0 +1,15 @@
+{
+  "wheel_diameter": 0.0825,
+  "wheelbase": 0.244,
+  "ticks_per_revolution": 310,
+  "wheel_diameter_left": 0.0825,
+  "wheel_diameter_right": 0.0825,
+  "lidar_offset_x": 0.01,
+  "lidar_offset_y": 0.0,
+  "wheel_diameter_mm": 82.5,
+  "wheelbase_mm": 244.0,
+  "wheel_diameter_left_mm": 82.5,
+  "wheel_diameter_right_mm": 82.5,
+  "lidar_offset_x_mm": 10.0,
+  "lidar_offset_y_mm": 0.0
+}

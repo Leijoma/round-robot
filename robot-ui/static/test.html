@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Load JS Files One by One</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Test Page</h1>
+    <p>If you can see this and interact with it, the page is not frozen.</p>
+    <button onclick="alert('Button works!')">Click Me</button>
+
+    <div id="log" style="border: 1px solid black; padding: 10px; margin-top: 20px;">
+        <h3>Load Status:</h3>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const status = document.getElementById('status');
+        status.innerHTML = 'HTML loaded OK<br>';
+
+        // Test loading app.js
+        console.log('About to load app.js...');
+        status.innerHTML += 'Loading app.js...<br>';
+    </script>
+
+    <!-- Load ONLY app.js first to test -->
+    <script src="/js/app.js"></script>
+
+    <script>
+        status.innerHTML += 'app.js loaded OK<br>';
+        console.log('app.js loaded successfully');
+    </script>
+</body>
+</html>

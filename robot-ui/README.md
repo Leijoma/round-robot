@@ -38,12 +38,12 @@ python3 server/robot_ui_server.py
 
 Open your web browser to:
 ```
-http://localhost:5000
+http://localhost:5001
 ```
 
 Or from another device on the same network:
 ```
-http://<your-computer-ip>:5000
+http://<your-computer-ip>:5001
 ```
 
 ## System Architecture
@@ -82,12 +82,23 @@ ESP32_HOST = '192.168.68.52'  # Your ESP32 IP address
 ESP32_PORT = 5000              # UDP port
 ```
 
-### Server Port
+### Robot Configuration
 
-The Flask server runs on port 5000 by default. Change it in `robot_ui_server.py`:
+The server contains robot-specific parameters for odometry calculation. Edit these in `robot_ui_server.py` to match your robot:
 
 ```python
-socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+WHEEL_DIAMETER = 0.067  # meters (67mm wheels)
+TICKS_PER_REV = 5760    # 48 encoder ticks * 120:1 gear ratio
+```
+
+**Note**: These values are used for velocity calculation from encoder data. They should match your robot's actual hardware configuration. The example Arduino Motor Control firmware uses different values (82mm wheels, 360 ticks/rev) - adjust accordingly for your setup.
+
+### Server Port
+
+The Flask server runs on port 5001 by default. Change it in `robot_ui_server.py`:
+
+```python
+socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
 ```
 
 ## Project Structure

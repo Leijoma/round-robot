@@ -144,6 +144,12 @@ function renderLidarPlot() {
     const centerY = height / 2;
     const maxRadius = Math.min(centerX, centerY) - 20;
 
+    // Safety check: prevent rendering if canvas has invalid dimensions
+    if (maxRadius <= 0 || !isFinite(maxRadius)) {
+        requestAnimationFrame(renderLidarPlot);
+        return;
+    }
+
     // Clear canvas
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, width, height);

@@ -44,6 +44,7 @@ class MessageType(IntEnum):
     MSG_LOAD_CONFIG = 0x18
     MSG_ZERO_ENCODERS = 0x19
     MSG_STOP = 0x1A  # FIXED: Was 0x15, should be 0x1A
+    MSG_RESET_POSE = 0x1B  # Reset pose to origin without zeroing encoders
 
     # Lidar Messages
     MSG_LIDAR_SCAN = 0x20      # ESP32 -> Host
@@ -77,10 +78,23 @@ class OdomPayload:
 
     @classmethod
     def unpack(cls, data: bytes) -> 'OdomPayload':
-        """Unpack Arduino odometry format: <IhhIIh> (18 bytes)"""
-        if len(data) == 18:
-            # Arduino format: timestamp, delta_L, delta_R, x, y, theta
-            values = struct.unpack('<IhhIIh', data)
+        """Unpack Arduino odometry format: <Iiiiih> (22 bytes)"""
+        if len(data) == 22:
+            # Arduino format (updated): timestamp, delta_L, delta_R, x, y, theta
+            # All positions are SIGNED int32 to handle negative coordinates
+            values = struct.unpack('<Iiiiih', data)
+            return cls(
+                timestamp=values[0],
+                delta_left=values[1],
+                delta_right=values[2],
+                x_mm=values[3],
+                y_mm=values[4],
+                theta_mrad=values[5]
+            )
+        elif len(data) == 18:
+            # Legacy Arduino format: timestamp, delta_L, delta_R, x, y, theta
+            # Old format with int16 deltas (kept for backwards compatibility)
+            values = struct.unpack('<Ihhiih', data)
             return cls(
                 timestamp=values[0],
                 delta_left=values[1],
@@ -107,7 +121,7 @@ class OdomPayload:
                 pwm_right=values[5]
             )
         else:
-            raise ValueError(f"Invalid odometry payload size: {len(data)} bytes (expected 18 or 24)")
+            raise ValueError(f"Invalid odometry payload size: {len(data)} bytes (expected 18, 22, or 24)")
 
 
 @dataclass
@@ -385,6 +399,14 @@ class RobotLink:
     def stop(self) -> bool:
         """Emergency stop - immediately halt motors"""
         return self.send_frame(MessageType.MSG_STOP)
+
+    def reset_pose(self) -> bool:
+        """Reset Arduino pose to origin (0, 0, 0) without zeroing encoders"""
+        return self.send_frame(MessageType.MSG_RESET_POSE)
+
+    def zero_encoders(self) -> bool:
+        """Zero encoder counts and reset pose to origin"""
+        return self.send_frame(MessageType.MSG_ZERO_ENCODERS)
 
     def set_pid(self, kp: float, ki: float, kd: float) -> bool:
         """Set PID controller parameters"""

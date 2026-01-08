@@ -636,8 +636,24 @@ body {
     font-size: 0.95rem;
 }
 
+.pose-label-dead-reckoning {
+    color: #ff9500;  /* Orange - Host odometry */
+}
+
+.pose-label-arduino {
+    color: #00d4ff;  /* Cyan/Blue - Arduino odometry */
+}
+
+.pose-label-icp {
+    color: #00ff00;  /* Green - ICP corrected */
+}
+
 .pose-value-dead-reckoning {
     color: #ff9500;
+}
+
+.pose-value-arduino {
+    color: #00d4ff;
 }
 
 .pose-value-icp {
@@ -661,6 +677,54 @@ body {
 .btn-reset-pose:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(244, 67, 54, 0.4);
+}
+
+.btn-zero-encoders {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.6rem 1rem;
+    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-zero-encoders:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(255, 152, 0, 0.4);
+}
+
+.btn-toggle {
+    padding: 0.4rem 0.8rem;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-toggle-active {
+    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+}
+
+.btn-toggle-active:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.4);
+}
+
+.btn-toggle-inactive {
+    background: linear-gradient(135deg, #757575 0%, #616161 100%);
+}
+
+.btn-toggle-inactive:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(117, 117, 117, 0.4);
 }
 
 /* ===================================

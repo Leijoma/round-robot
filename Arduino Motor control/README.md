@@ -81,8 +81,15 @@ Send velocity commands using the RobotLink protocol:
 # Example using Python (requires robotlink.py library)
 from robotlink import RobotLink
 
-# Connect to Arduino
-robot = RobotLink(serial_port='/dev/ttyACM0', baud=115200)
+# IMPORTANT: Connect to Arduino's SoftwareSerial (A0/A1), NOT USB!
+# For direct serial connection, use USB-to-Serial adapter on A0/A1
+# For wireless, connect via ESP32 WiFi bridge (see ESP32 firmware docs)
+
+# Option 1: Direct serial connection (USB-to-Serial adapter on A0/A1)
+robot = RobotLink(serial_port='/dev/ttyUSB0', baud=9600)
+
+# Option 2: Via ESP32 WiFi/UDP bridge (recommended)
+robot = RobotLink(host='192.168.68.52', port=5000)  # ESP32 IP address
 
 # Move forward at 0.15 m/s
 robot.send_cmd_vel(v=150, w=0)  # v in mm/s, w in mrad/s
@@ -96,6 +103,8 @@ robot.set_velocity(left=0.1, right=0.1)  # both motors at 0.1 m/s
 # Stop
 robot.stop()
 ```
+
+**Note**: The Arduino's USB port (Hardware Serial) is used for **debug output only**. RobotLink protocol communication happens on **A0/A1 at 9600 baud**. See [SOFTWARESERIAL_UPDATE.md](SOFTWARESERIAL_UPDATE.md) for migration details.
 
 ### Configuration Management
 
@@ -208,17 +217,20 @@ See [hardware-pinout.md](docs/hardware-pinout.md) for complete pin assignments.
 - Right Motor: INA=4, INB=9, PWM=6
 - Left Encoder: A=2 (INT0), B=10
 - Right Encoder: A=3 (INT1), B=11
-- Serial: RX=0, TX=1 (115200 baud)
+- RobotLink Serial: RX=A0, TX=A1 (SoftwareSerial @ 9600 baud)
+- Debug Serial: USB (Hardware Serial @ 115200 baud)
 
 ## Performance Specifications
 
+- **Firmware Version**: 1.1 (SoftwareSerial)
 - **Control Loop**: 20 Hz (50ms update interval)
 - **Odometry Rate**: Configurable (default 20 Hz)
-- **Serial Baud**: 115200 bps
+- **RobotLink Serial**: 9600 bps (SoftwareSerial on A0/A1)
+- **Debug Serial**: 115200 bps (USB/Hardware Serial)
 - **Maximum Velocity**: ~0.3 m/s (recommended operating range)
 - **Minimum Velocity**: ~0.05 m/s (with proper deadband tuning)
-- **RAM Usage**: 327 bytes (16% of 2KB)
-- **Flash Usage**: 9644 bytes (30% of 32KB)
+- **RAM Usage**: 460 bytes (22.5% of 2KB)
+- **Flash Usage**: 13136 bytes (40.7% of 32KB)
 
 ## Troubleshooting
 
@@ -239,10 +251,13 @@ See [hardware-pinout.md](docs/hardware-pinout.md) for complete pin assignments.
 - Test with multimeter: should see pulses on encoder pins
 
 ### Serial communication fails
-- Verify baud rate is 115200
-- Check USB cable connection
+- **For RobotLink**: Verify baud rate is 9600 on A0/A1
+- **For Debug**: Verify baud rate is 115200 on USB
+- Check wiring: A0=RX, A1=TX (remember TX-RX crossover!)
+- Ensure common ground between Arduino and host
 - Try resetting Arduino
 - Verify CRC16 calculation in host code
+- See [SOFTWARESERIAL_UPDATE.md](SOFTWARESERIAL_UPDATE.md) for troubleshooting
 
 ### Odometry drift
 - Calibrate wheel diameter and wheelbase

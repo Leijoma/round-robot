@@ -82,10 +82,16 @@ Library is located in: `/Users/magnus/Documents/PlatformIO/Projects/round robot 
 Edit [src/main.cpp](src/main.cpp) to configure WiFi credentials:
 
 ```cpp
-const char* WIFI_SSID = "SurfsUp";        // Your WiFi network name
-const char* WIFI_PASSWORD = "surf-1111";  // Your WiFi password
-const uint16_t UDP_PORT = 5000;            // UDP port for host communication
+const char* WIFI_SSID = "SurfsUp";           // Your WiFi network name
+const char* WIFI_PASSWORD = "YourPassword";  // Your WiFi password (CHANGE THIS!)
+const uint16_t UDP_PORT = 5000;              // UDP port for host communication
 ```
+
+**SECURITY WARNING**: WiFi credentials are currently hardcoded in `src/main.cpp`. For production use, consider:
+- Using a configuration file stored on ESP32 filesystem (SPIFFS/LittleFS)
+- Implementing WiFi provisioning mode (e.g., WiFiManager library)
+- Storing credentials in EEPROM
+- **Never commit actual passwords to version control**
 
 ### Build and Upload
 

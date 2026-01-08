@@ -58,3 +58,7 @@ build/
 *.exe
 *.out
 *.app
+
+# Claude project files (may contain tokens/keys)
+.claude/
+.claudeproject

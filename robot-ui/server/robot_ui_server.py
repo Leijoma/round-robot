@@ -23,7 +23,7 @@ from slam.motion_model import RobotParameters
 from slam.localization import IntegratedLocalizer
 
 # Configuration
-ESP32_HOST = '192.168.68.52'
+ESP32_HOST = '192.168.68.74'
 ESP32_PORT = 5000
 
 # Flask app setup
@@ -87,11 +87,11 @@ def init_robot_connection():
         print('✓ Data synchronizer initialized')
 
         # Initialize integrated localizer (Phase 3 & 4)
-        robot_params = RobotParameters(
-            wheel_diameter=0.082,  # 82mm wheels
-            wheelbase=0.24,  # 240mm wheelbase
-            ticks_per_revolution=360
-        )
+        # Load robot parameters from file or use defaults
+        config_file = os.path.join(os.path.dirname(__file__), 'robot_config.json')
+        robot_params = RobotParameters.load(config_file)
+        print(f'✓ Robot parameters loaded: {robot_params}')
+
         localizer = IntegratedLocalizer(robot_params=robot_params)
         print('✓ Integrated localizer initialized (dead reckoning + ICP)')
 
@@ -165,7 +165,7 @@ def esp32_communication_thread():
                         data_synchronizer.add_odometry(odom_reading)
                         localizer.update_odometry(odom_reading)
 
-                        # Emit pose update (Story 5.1)
+                        # Emit pose update (Story 5.1) - with three odometry sources
                         dr_pose = localizer.get_dead_reckoning_pose()
                         icp_pose = localizer.get_corrected_pose()
                         drift = localizer.get_pose_drift()
@@ -175,6 +175,11 @@ def esp32_communication_thread():
                                 'x': dr_pose.x,
                                 'y': dr_pose.y,
                                 'theta_deg': np.rad2deg(dr_pose.theta)
+                            },
+                            'arduino_odo': {
+                                'x': odom.x_mm / 1000.0,  # Convert mm to meters
+                                'y': odom.y_mm / 1000.0,
+                                'theta_deg': odom.theta_mrad / 1000.0 * 180.0 / np.pi
                             },
                             'icp_corrected': {
                                 'x': icp_pose.x,
@@ -562,15 +567,22 @@ def handle_save_config():
 @socketio.on('reset_pose')
 def handle_reset_pose():
     """Reset robot pose to origin"""
-    global localizer
+    global localizer, robot
 
     if localizer is None:
         emit('error', {'message': 'Localizer not initialized'})
         return
 
     try:
+        # Reset host localizer (dead reckoning + ICP)
         localizer.reset()
-        print('Reset pose to origin (0, 0, 0°)')
+
+        # Reset Arduino odometry pose
+        if robot is not None:
+            robot.reset_pose()
+            print('Reset pose to origin (0, 0, 0°) - Host & Arduino')
+        else:
+            print('Reset pose to origin (0, 0, 0°) - Host only (Arduino not connected)')
 
         # Immediately send updated pose to confirm
         dr_pose = localizer.get_dead_reckoning_pose()
@@ -582,6 +594,11 @@ def handle_reset_pose():
                 'x': dr_pose.x,
                 'y': dr_pose.y,
                 'theta_deg': np.rad2deg(dr_pose.theta)
+            },
+            'arduino_odo': {
+                'x': 0.0,
+                'y': 0.0,
+                'theta_deg': 0.0
             },
             'icp_corrected': {
                 'x': icp_pose.x,
@@ -596,6 +613,128 @@ def handle_reset_pose():
 
     except Exception as e:
         print(f'Error resetting pose: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('zero_encoders')
+def handle_zero_encoders():
+    """Zero Arduino encoders and reset all odometry"""
+    global localizer, robot, odom_state
+
+    if localizer is None:
+        emit('error', {'message': 'Localizer not initialized'})
+        return
+
+    try:
+        # Reset host localizer (dead reckoning + ICP)
+        localizer.reset()
+
+        # Reset encoder totals
+        odom_state['encoder_left_total'] = 0
+        odom_state['encoder_right_total'] = 0
+
+        # Zero Arduino encoders and pose
+        if robot is not None:
+            robot.zero_encoders()
+            print('Zeroed encoders and reset pose to origin (0, 0, 0°) - Host & Arduino')
+        else:
+            print('Zeroed encoders and reset pose to origin (0, 0, 0°) - Host only (Arduino not connected)')
+
+        # Immediately send updated pose to confirm
+        dr_pose = localizer.get_dead_reckoning_pose()
+        icp_pose = localizer.get_corrected_pose()
+        drift = localizer.get_pose_drift()
+
+        socketio.emit('pose_update', {
+            'dead_reckoning': {
+                'x': dr_pose.x,
+                'y': dr_pose.y,
+                'theta_deg': np.rad2deg(dr_pose.theta)
+            },
+            'arduino_odo': {
+                'x': 0.0,
+                'y': 0.0,
+                'theta_deg': 0.0
+            },
+            'icp_corrected': {
+                'x': icp_pose.x,
+                'y': icp_pose.y,
+                'theta_deg': np.rad2deg(icp_pose.theta)
+            },
+            'drift': {
+                'position': drift['distance_drift'],
+                'heading': drift['heading_drift_deg']
+            }
+        })
+
+    except Exception as e:
+        print(f'Error zeroing encoders: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('get_robot_params')
+def handle_get_robot_params():
+    """Get current robot parameters"""
+    global localizer
+
+    if localizer is None:
+        emit('error', {'message': 'Localizer not initialized'})
+        return
+
+    try:
+        params = localizer.dead_reckoning.motion_model.params
+        emit('robot_params', params.to_dict())
+        print(f'Sent robot parameters: {params}')
+    except Exception as e:
+        print(f'Error getting robot parameters: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('set_robot_params')
+def handle_set_robot_params(data):
+    """Update robot parameters"""
+    global localizer
+
+    if localizer is None:
+        emit('error', {'message': 'Localizer not initialized'})
+        return
+
+    try:
+        # Update parameters
+        params = localizer.dead_reckoning.motion_model.params
+        params.wheel_diameter = float(data.get('wheel_diameter_mm', 80)) / 1000.0
+        params.wheelbase = float(data.get('wheelbase_mm', 244)) / 1000.0
+        params.ticks_per_revolution = int(data.get('ticks_per_revolution', 360))
+        params.lidar_offset_x = float(data.get('lidar_offset_x_mm', 10)) / 1000.0
+        params.lidar_offset_y = float(data.get('lidar_offset_y_mm', 0)) / 1000.0
+
+        print(f'Updated robot parameters: {params}')
+
+        # Send back updated parameters
+        emit('robot_params', params.to_dict())
+
+    except Exception as e:
+        print(f'Error setting robot parameters: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('save_robot_params')
+def handle_save_robot_params():
+    """Save robot parameters to file"""
+    global localizer
+
+    if localizer is None:
+        emit('error', {'message': 'Localizer not initialized'})
+        return
+
+    try:
+        config_file = os.path.join(os.path.dirname(__file__), 'robot_config.json')
+        params = localizer.dead_reckoning.motion_model.params
+        params.save(config_file)
+        print(f'Saved robot parameters to {config_file}')
+        emit('status', {'message': 'Robot parameters saved successfully'})
+    except Exception as e:
+        print(f'Error saving robot parameters: {e}')
         emit('error', {'message': str(e)})
 
 

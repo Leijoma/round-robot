@@ -79,6 +79,21 @@ function initializeWebSocket() {
             showConfigStatus('Configuration saved to EEPROM', 'success');
         }
     });
+
+    socket.on('robot_params', (data) => {
+        console.log('Received robot parameters:', data);
+        document.getElementById('param-wheel-dia').value = data.wheel_diameter_mm.toFixed(1);
+        document.getElementById('param-wheelbase').value = data.wheelbase_mm.toFixed(1);
+        document.getElementById('param-ticks-per-rev').value = data.ticks_per_revolution;
+        document.getElementById('param-lidar-x').value = data.lidar_offset_x_mm.toFixed(1);
+        document.getElementById('param-lidar-y').value = data.lidar_offset_y_mm.toFixed(1);
+        updateRobotParamsStatus('Parameters loaded');
+    });
+
+    socket.on('status', (data) => {
+        console.log('Status:', data.message);
+        updateRobotParamsStatus(data.message);
+    });
 }
 
 /**
@@ -144,10 +159,24 @@ function initializeControls() {
     const btnResetPose = document.getElementById('btn-reset-pose');
     btnResetPose.addEventListener('click', resetPose);
 
+    // Zero encoders button
+    const btnZeroEncoders = document.getElementById('btn-zero-encoders');
+    btnZeroEncoders.addEventListener('click', zeroEncoders);
+
+    // Robot parameters buttons
+    const btnGetRobotParams = document.getElementById('btn-get-robot-params');
+    const btnApplyRobotParams = document.getElementById('btn-apply-robot-params');
+    const btnSaveRobotParams = document.getElementById('btn-save-robot-params');
+
+    btnGetRobotParams.addEventListener('click', getRobotParameters);
+    btnApplyRobotParams.addEventListener('click', applyRobotParameters);
+    btnSaveRobotParams.addEventListener('click', saveRobotParameters);
+
     // Request initial status on startup
     setTimeout(() => {
         if (isConnected) {
             requestRobotStatus();
+            getRobotParameters();  // Also get robot parameters
         }
     }, 1000);
 }
@@ -175,7 +204,7 @@ function initializeKeyboardControls() {
             case 'arrowup':
                 direction = 'forward';
                 break;
-            case 's':
+            case 'x':
             case 'arrowdown':
                 direction = 'backward';
                 break;
@@ -187,6 +216,10 @@ function initializeKeyboardControls() {
             case 'arrowright':
                 direction = 'right';
                 break;
+            case 's':
+                e.preventDefault();
+                stopMotor();
+                return;
         }
 
         // Only trigger if this is a NEW key press (not auto-repeat)
@@ -201,7 +234,7 @@ function initializeKeyboardControls() {
         if (e.target.tagName === 'INPUT') return;
 
         const key = e.key.toLowerCase();
-        if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        if (['w', 'x', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
             e.preventDefault();
             pressedKeys.delete(key);
             handleDirectionRelease();
@@ -369,12 +402,20 @@ function removeDirectionHighlight() {
 }
 
 function updatePoseDisplay(data) {
-    // Dead reckoning pose
+    // Host odometry (dead reckoning) pose
     if (data.dead_reckoning) {
         const dr = data.dead_reckoning;
         document.getElementById('pose-dr-x').textContent = `${dr.x.toFixed(3)} m`;
         document.getElementById('pose-dr-y').textContent = `${dr.y.toFixed(3)} m`;
         document.getElementById('pose-dr-theta').textContent = `${dr.theta_deg.toFixed(1)}°`;
+    }
+
+    // Arduino odometry pose
+    if (data.arduino_odo) {
+        const ard = data.arduino_odo;
+        document.getElementById('pose-ard-x').textContent = `${ard.x.toFixed(3)} m`;
+        document.getElementById('pose-ard-y').textContent = `${ard.y.toFixed(3)} m`;
+        document.getElementById('pose-ard-theta').textContent = `${ard.theta_deg.toFixed(1)}°`;
     }
 
     // ICP-corrected pose
@@ -502,6 +543,81 @@ function resetPose() {
     if (confirm('Reset robot pose to origin (0, 0, 0°)?')) {
         console.log('Resetting pose to origin...');
         socket.emit('reset_pose');
+    }
+}
+
+/**
+ * Zero encoder counts and reset pose
+ */
+function zeroEncoders() {
+    if (!socket || !isConnected) {
+        alert('Not connected to server');
+        return;
+    }
+
+    if (confirm('Zero Arduino encoders and reset all odometry to origin?')) {
+        console.log('Zeroing encoders and resetting pose...');
+        socket.emit('zero_encoders');
+    }
+}
+
+/**
+ * Robot Parameters Functions
+ */
+function getRobotParameters() {
+    if (!socket || !isConnected) {
+        alert('Not connected to server');
+        return;
+    }
+
+    console.log('Requesting robot parameters...');
+    socket.emit('get_robot_params');
+    updateRobotParamsStatus('Reading parameters...');
+}
+
+function applyRobotParameters() {
+    if (!socket || !isConnected) {
+        alert('Not connected to server');
+        return;
+    }
+
+    const params = {
+        wheel_diameter_mm: parseFloat(document.getElementById('param-wheel-dia').value),
+        wheelbase_mm: parseFloat(document.getElementById('param-wheelbase').value),
+        ticks_per_revolution: parseInt(document.getElementById('param-ticks-per-rev').value),
+        lidar_offset_x_mm: parseFloat(document.getElementById('param-lidar-x').value),
+        lidar_offset_y_mm: parseFloat(document.getElementById('param-lidar-y').value),
+    };
+
+    console.log('Applying robot parameters:', params);
+    socket.emit('set_robot_params', params);
+    updateRobotParamsStatus('Applying parameters...');
+}
+
+function saveRobotParameters() {
+    if (!socket || !isConnected) {
+        alert('Not connected to server');
+        return;
+    }
+
+    if (confirm('Save robot parameters to file?')) {
+        console.log('Saving robot parameters...');
+        socket.emit('save_robot_params');
+        updateRobotParamsStatus('Saving to file...');
+    }
+}
+
+function updateRobotParamsStatus(message) {
+    const statusEl = document.getElementById('robot-params-status');
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.style.color = '#4fc3f7';
+
+        // Reset to 'Ready' after 3 seconds
+        setTimeout(() => {
+            statusEl.textContent = 'Ready';
+            statusEl.style.color = '';
+        }, 3000);
     }
 }
 
