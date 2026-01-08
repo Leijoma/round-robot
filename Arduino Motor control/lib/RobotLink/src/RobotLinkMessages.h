@@ -22,6 +22,16 @@ struct SetPidPayload {
   float Kd;
 } __attribute__((packed));
 
+// MSG_SET_PID_PER_MOTOR (0x1C): Set PID parameters per motor
+struct SetPidPerMotorPayload {
+  float leftKp;
+  float leftKi;
+  float leftKd;
+  float rightKp;
+  float rightKi;
+  float rightKd;
+} __attribute__((packed));
+
 // MSG_SET_DEADBAND (0x12): Set deadband PWM offsets
 struct SetDeadbandPayload {
   float leftForward;   // PWM offset

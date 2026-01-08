@@ -106,19 +106,37 @@
             <h2>PID & Deadband Config</h2>
 
             <div class="config-section">
-                <h3>PID Parameters</h3>
+                <h3>PID Parameters - Left Motor</h3>
                 <div class="config-grid">
                     <div class="config-item">
-                        <label for="pid-kp">Kp:</label>
-                        <input type="number" id="pid-kp" step="0.1" value="10.0">
+                        <label for="pid-left-kp">Kp:</label>
+                        <input type="number" id="pid-left-kp" step="0.1" value="50.0">
                     </div>
                     <div class="config-item">
-                        <label for="pid-ki">Ki:</label>
-                        <input type="number" id="pid-ki" step="0.1" value="5.0">
+                        <label for="pid-left-ki">Ki:</label>
+                        <input type="number" id="pid-left-ki" step="0.1" value="60.0">
                     </div>
                     <div class="config-item">
-                        <label for="pid-kd">Kd:</label>
-                        <input type="number" id="pid-kd" step="0.1" value="2.0">
+                        <label for="pid-left-kd">Kd:</label>
+                        <input type="number" id="pid-left-kd" step="0.1" value="0.0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h3>PID Parameters - Right Motor</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="pid-right-kp">Kp:</label>
+                        <input type="number" id="pid-right-kp" step="0.1" value="50.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="pid-right-ki">Ki:</label>
+                        <input type="number" id="pid-right-ki" step="0.1" value="20.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="pid-right-kd">Kd:</label>
+                        <input type="number" id="pid-right-kd" step="0.1" value="0.0">
                     </div>
                 </div>
                 <button id="btn-apply-pid" class="btn-config">Apply PID</button>
@@ -129,19 +147,19 @@
                 <div class="config-grid">
                     <div class="config-item">
                         <label for="db-left-fwd">Left Fwd:</label>
-                        <input type="number" id="db-left-fwd" step="1" value="30">
+                        <input type="number" id="db-left-fwd" step="1" value="50">
                     </div>
                     <div class="config-item">
                         <label for="db-left-rev">Left Rev:</label>
-                        <input type="number" id="db-left-rev" step="1" value="30">
+                        <input type="number" id="db-left-rev" step="1" value="50">
                     </div>
                     <div class="config-item">
                         <label for="db-right-fwd">Right Fwd:</label>
-                        <input type="number" id="db-right-fwd" step="1" value="30">
+                        <input type="number" id="db-right-fwd" step="1" value="35">
                     </div>
                     <div class="config-item">
                         <label for="db-right-rev">Right Rev:</label>
-                        <input type="number" id="db-right-rev" step="1" value="30">
+                        <input type="number" id="db-right-rev" step="1" value="35">
                     </div>
                 </div>
                 <button id="btn-apply-deadband" class="btn-config">Apply Deadband</button>

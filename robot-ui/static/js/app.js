@@ -473,13 +473,16 @@ function applyPidSettings() {
         return;
     }
 
-    const kp = parseFloat(document.getElementById('pid-kp').value);
-    const ki = parseFloat(document.getElementById('pid-ki').value);
-    const kd = parseFloat(document.getElementById('pid-kd').value);
+    const leftKp = parseFloat(document.getElementById('pid-left-kp').value);
+    const leftKi = parseFloat(document.getElementById('pid-left-ki').value);
+    const leftKd = parseFloat(document.getElementById('pid-left-kd').value);
+    const rightKp = parseFloat(document.getElementById('pid-right-kp').value);
+    const rightKi = parseFloat(document.getElementById('pid-right-ki').value);
+    const rightKd = parseFloat(document.getElementById('pid-right-kd').value);
 
-    console.log(`Applying PID: Kp=${kp}, Ki=${ki}, Kd=${kd}`);
-    socket.emit('set_pid', { kp, ki, kd });
-    showConfigStatus('Applying PID settings...', '');
+    console.log(`Applying per-motor PID: Left(${leftKp},${leftKi},${leftKd}) Right(${rightKp},${rightKi},${rightKd})`);
+    socket.emit('set_pid_per_motor', { leftKp, leftKi, leftKd, rightKp, rightKi, rightKd });
+    showConfigStatus('Applying per-motor PID settings...', '');
 }
 
 function applyDeadbandSettings() {

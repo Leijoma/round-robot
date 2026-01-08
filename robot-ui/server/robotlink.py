@@ -45,6 +45,7 @@ class MessageType(IntEnum):
     MSG_ZERO_ENCODERS = 0x19
     MSG_STOP = 0x1A  # FIXED: Was 0x15, should be 0x1A
     MSG_RESET_POSE = 0x1B  # Reset pose to origin without zeroing encoders
+    MSG_SET_PID_PER_MOTOR = 0x1C  # Set per-motor PID parameters (left/right separate)
 
     # Lidar Messages
     MSG_LIDAR_SCAN = 0x20      # ESP32 -> Host
@@ -409,9 +410,15 @@ class RobotLink:
         return self.send_frame(MessageType.MSG_ZERO_ENCODERS)
 
     def set_pid(self, kp: float, ki: float, kd: float) -> bool:
-        """Set PID controller parameters"""
+        """Set PID controller parameters (both motors)"""
         payload = struct.pack('<fff', kp, ki, kd)
         return self.send_frame(MessageType.MSG_SET_PID, payload)
+
+    def set_pid_per_motor(self, left_kp: float, left_ki: float, left_kd: float,
+                          right_kp: float, right_ki: float, right_kd: float) -> bool:
+        """Set per-motor PID controller parameters"""
+        payload = struct.pack('<ffffff', left_kp, left_ki, left_kd, right_kp, right_ki, right_kd)
+        return self.send_frame(MessageType.MSG_SET_PID_PER_MOTOR, payload)
 
     def set_deadband(self, left_fwd: float, left_rev: float,
                      right_fwd: float, right_rev: float) -> bool:

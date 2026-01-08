@@ -237,12 +237,14 @@ void updateControl(float dt) {
 // EEPROM Configuration Management
 // ============================================================
 const uint16_t EEPROM_MAGIC = 0xAB12;
-const uint16_t EEPROM_VERSION = 1;
+const uint16_t EEPROM_VERSION = 2;  // Bumped for per-motor PID support
 
 struct EEPROMConfig {
   uint16_t magic;
   uint16_t version;
-  float Kp, Ki, Kd;
+  // Per-motor PID parameters (left and right can be different)
+  float leftKp, leftKi, leftKd;
+  float rightKp, rightKi, rightKd;
   float deadbandLeftFwd, deadbandLeftRev;
   float deadbandRightFwd, deadbandRightRev;
   float wheelDiameter;
@@ -264,9 +266,13 @@ void saveConfig() {
   EEPROMConfig cfg;
   cfg.magic = EEPROM_MAGIC;
   cfg.version = EEPROM_VERSION;
-  cfg.Kp = pidLeft.Kp;
-  cfg.Ki = pidLeft.Ki;
-  cfg.Kd = pidLeft.Kd;
+  // Save per-motor PID parameters
+  cfg.leftKp = pidLeft.Kp;
+  cfg.leftKi = pidLeft.Ki;
+  cfg.leftKd = pidLeft.Kd;
+  cfg.rightKp = pidRight.Kp;
+  cfg.rightKi = pidRight.Ki;
+  cfg.rightKd = pidRight.Kd;
   cfg.deadbandLeftFwd = pidLeft.deadband_forward;
   cfg.deadbandLeftRev = pidLeft.deadband_reverse;
   cfg.deadbandRightFwd = pidRight.deadband_forward;
@@ -293,10 +299,13 @@ bool loadConfig() {
     return false;
   }
 
-  // Load configuration
-  pidLeft.Kp = pidRight.Kp = cfg.Kp;
-  pidLeft.Ki = pidRight.Ki = cfg.Ki;
-  pidLeft.Kd = pidRight.Kd = cfg.Kd;
+  // Load per-motor PID configuration
+  pidLeft.Kp = cfg.leftKp;
+  pidLeft.Ki = cfg.leftKi;
+  pidLeft.Kd = cfg.leftKd;
+  pidRight.Kp = cfg.rightKp;
+  pidRight.Ki = cfg.rightKi;
+  pidRight.Kd = cfg.rightKd;
   pidLeft.deadband_forward = cfg.deadbandLeftFwd;
   pidLeft.deadband_reverse = cfg.deadbandLeftRev;
   pidRight.deadband_forward = cfg.deadbandRightFwd;
@@ -360,6 +369,29 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
       // Auto-save to EEPROM when updated from server
       saveConfig();
       Serial.println(F("PID updated and saved to EEPROM"));
+      break;
+    }
+
+    case RobotLink::MSG_SET_PID_PER_MOTOR: {
+      if (len != sizeof(RobotLink::SetPidPerMotorPayload)) break;
+
+      RobotLink::SetPidPerMotorPayload* msg = (RobotLink::SetPidPerMotorPayload*)payload;
+      pidLeft.Kp = msg->leftKp;
+      pidLeft.Ki = msg->leftKi;
+      pidLeft.Kd = msg->leftKd;
+      pidRight.Kp = msg->rightKp;
+      pidRight.Ki = msg->rightKi;
+      pidRight.Kd = msg->rightKd;
+
+      // Auto-save to EEPROM when updated from server
+      saveConfig();
+      Serial.print(F("Per-motor PID updated: L("));
+      Serial.print(pidLeft.Kp); Serial.print(F(","));
+      Serial.print(pidLeft.Ki); Serial.print(F(","));
+      Serial.print(pidLeft.Kd); Serial.print(F(") R("));
+      Serial.print(pidRight.Kp); Serial.print(F(","));
+      Serial.print(pidRight.Ki); Serial.print(F(","));
+      Serial.print(pidRight.Kd); Serial.println(F(")"));
       break;
     }
 

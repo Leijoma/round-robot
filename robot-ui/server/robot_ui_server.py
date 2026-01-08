@@ -494,7 +494,7 @@ def handle_request_status():
 
 @socketio.on('set_pid')
 def handle_set_pid(data):
-    """Set PID parameters"""
+    """Set PID parameters (both motors)"""
     global robot
 
     if robot is None:
@@ -515,6 +515,35 @@ def handle_set_pid(data):
 
     except Exception as e:
         print(f'Error setting PID: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('set_pid_per_motor')
+def handle_set_pid_per_motor(data):
+    """Set per-motor PID parameters"""
+    global robot
+
+    if robot is None:
+        emit('error', {'message': 'ESP32 not connected'})
+        return
+
+    try:
+        left_kp = float(data.get('leftKp'))
+        left_ki = float(data.get('leftKi'))
+        left_kd = float(data.get('leftKd'))
+        right_kp = float(data.get('rightKp'))
+        right_ki = float(data.get('rightKi'))
+        right_kd = float(data.get('rightKd'))
+
+        robot.set_pid_per_motor(left_kp, left_ki, left_kd, right_kp, right_ki, right_kd)
+        print(f'Set per-motor PID: Left(Kp={left_kp}, Ki={left_ki}, Kd={left_kd}) Right(Kp={right_kp}, Ki={right_ki}, Kd={right_kd})')
+
+        # Request updated status to confirm
+        time.sleep(0.1)
+        robot.request_status()
+
+    except Exception as e:
+        print(f'Error setting per-motor PID: {e}')
         emit('error', {'message': str(e)})
 
 
