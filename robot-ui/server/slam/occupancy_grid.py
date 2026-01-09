@@ -44,6 +44,8 @@ class OccupancyGrid:
         width: int = 100,
         height: int = 100,
         resolution: float = 0.05,
+        origin_offset_x: float = 0.0,
+        origin_offset_y: float = 0.0,
         l_occ: float = 0.7,
         l_free: float = -0.4,
         l_max: float = 3.5,
@@ -55,14 +57,23 @@ class OccupancyGrid:
             width: Grid width in cells (default 100 = 5m @ 5cm resolution)
             height: Grid height in cells (default 100 = 5m @ 5cm resolution)
             resolution: Cell size in meters (default 0.05 = 5cm/cell)
+            origin_offset_x: X offset of world origin in map (meters, default 0.0 = centered)
+            origin_offset_y: Y offset of world origin in map (meters, default 0.0 = centered)
             l_occ: Log-odds update for occupied cells (default 0.7)
             l_free: Log-odds update for free cells (default -0.4)
             l_max: Maximum log-odds clamp (default 3.5 ≈ 97% probability)
             l_min: Minimum log-odds clamp (default -3.5 ≈ 3% probability)
+
+        Note on origin_offset:
+            - (0, 0): Robot starts at center of map (symmetric coverage)
+            - (-2.5, -2.5): Robot starts near bottom-left corner (good for room mapping)
+            - Positive offset moves origin toward top-right of grid
         """
         self.width = width
         self.height = height
         self.resolution = resolution  # meters per cell
+        self.origin_offset_x = origin_offset_x  # meters
+        self.origin_offset_y = origin_offset_y  # meters
 
         # Log-odds grid: 0 = unknown, <0 = free, >0 = occupied
         self.log_odds = np.zeros((height, width), dtype=np.float32)
@@ -80,7 +91,9 @@ class OccupancyGrid:
     def world_to_grid(self, x_m: float, y_m: float) -> Tuple[int, int]:
         """Convert world coordinates (meters) to grid indices
 
-        Grid origin is at center, with X right and Y up in world frame.
+        World origin (0,0) maps to grid position based on origin_offset.
+        With offset (0,0), world origin is at grid center.
+        With offset (-2.5,-2.5), world origin is near bottom-left corner.
 
         Args:
             x_m: X coordinate in meters (world frame)
@@ -92,8 +105,9 @@ class OccupancyGrid:
         center_x = self.width // 2
         center_y = self.height // 2
 
-        gx = int(center_x + x_m / self.resolution)
-        gy = int(center_y - y_m / self.resolution)  # Y-axis inverted (grid Y down)
+        # Apply origin offset: subtract offset to shift origin position in grid
+        gx = int(center_x + (x_m - self.origin_offset_x) / self.resolution)
+        gy = int(center_y - (y_m - self.origin_offset_y) / self.resolution)  # Y-axis inverted (grid Y down)
 
         return gx, gy
 
@@ -110,8 +124,9 @@ class OccupancyGrid:
         center_x = self.width // 2
         center_y = self.height // 2
 
-        x_m = (gx - center_x) * self.resolution
-        y_m = (center_y - gy) * self.resolution  # Y-axis inverted
+        # Apply origin offset: add offset to restore world coordinates
+        x_m = (gx - center_x) * self.resolution + self.origin_offset_x
+        y_m = (center_y - gy) * self.resolution + self.origin_offset_y  # Y-axis inverted
 
         return x_m, y_m
 
@@ -305,6 +320,8 @@ class OccupancyGrid:
             'width': self.width,
             'height': self.height,
             'resolution': self.resolution,
+            'origin_offset_x': self.origin_offset_x,
+            'origin_offset_y': self.origin_offset_y,
             'grid': display_grid.tolist(),  # Convert numpy array to list for JSON
             'stats': {
                 'scans': self.scan_count,

@@ -100,8 +100,17 @@ def init_robot_connection():
         print('✓ Integrated localizer initialized (dead reckoning + ICP)')
 
         # Initialize occupancy grid (Phase 5)
-        occupancy_grid = OccupancyGrid(width=140, height=140, resolution=0.05)
+        # Origin offset: Robot starts near bottom-left for room mapping
+        # (-2.5, -2.5) gives: +4.5m right/forward, -2.5m left/backward coverage
+        occupancy_grid = OccupancyGrid(
+            width=140,
+            height=140,
+            resolution=0.05,
+            origin_offset_x=-2.5,
+            origin_offset_y=-2.5
+        )
         print('✓ Occupancy grid initialized (140×140 @ 5cm resolution, 7m×7m coverage)')
+        print('  Map coverage: X: -2.5m to +4.5m, Y: -2.5m to +4.5m (corner start)')
 
         robot_connected = True
 

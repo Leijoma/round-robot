@@ -70,6 +70,8 @@ class OccupancyMapRenderer {
         this.width = mapData.width;
         this.height = mapData.height;
         this.resolution = mapData.resolution;
+        this.originOffsetX = mapData.origin_offset_x || 0.0;
+        this.originOffsetY = mapData.origin_offset_y || 0.0;
         this.grid = mapData.grid;
         this.robotPose = mapData.robot_pose;
 
@@ -209,9 +211,9 @@ class OccupancyMapRenderer {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
 
-        // Grid coordinates
-        const gx = this.width / 2 + pose.x / this.resolution;
-        const gy = this.height / 2 - pose.y / this.resolution;  // Y inverted
+        // Grid coordinates (account for origin offset)
+        const gx = this.width / 2 + (pose.x - this.originOffsetX) / this.resolution;
+        const gy = this.height / 2 - (pose.y - this.originOffsetY) / this.resolution;  // Y inverted
 
         // Pixel coordinates
         const pixelX = gx * cellWidth;
@@ -311,8 +313,9 @@ class OccupancyMapRenderer {
         const gx = pixelX / cellWidth;
         const gy = pixelY / cellHeight;
 
-        const worldX = (gx - this.width / 2) * this.resolution;
-        const worldY = (this.height / 2 - gy) * this.resolution;
+        // Account for origin offset
+        const worldX = (gx - this.width / 2) * this.resolution + this.originOffsetX;
+        const worldY = (this.height / 2 - gy) * this.resolution + this.originOffsetY;
 
         return { x: worldX, y: worldY };
     }
