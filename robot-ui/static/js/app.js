@@ -15,6 +15,9 @@ let pressedKeys = new Set(); // Track which keys are currently held down
 // Odometry streaming state
 let streamingEnabled = true;
 
+// Occupancy map renderer
+let occupancyMap = null;
+
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Robot Control UI initializing...');
@@ -22,6 +25,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeControls();
     initializeKeyboardControls();
     initializeTabs();
+
+    // Initialize occupancy map renderer (Phase 5)
+    const mapCanvas = document.getElementById('map-canvas');
+    if (mapCanvas) {
+        occupancyMap = new OccupancyMapRenderer('map-canvas');
+        console.log('✓ Occupancy map renderer initialized');
+    }
 });
 
 /**
@@ -149,6 +159,21 @@ function initializeWebSocket() {
         const msg = `✗ ${data.message_type} failed: ${data.error_description}`;
         showConfigStatus(msg, 'error');
     });
+
+    // Occupancy grid map updates (Phase 5)
+    socket.on('map_update', (data) => {
+        if (occupancyMap) {
+            occupancyMap.updateMap(data);
+
+            // Update map statistics if UI elements exist
+            if (data.stats) {
+                const scansElem = document.getElementById('map-scans');
+                const updatesElem = document.getElementById('map-updates');
+                if (scansElem) scansElem.textContent = data.stats.scans;
+                if (updatesElem) updatesElem.textContent = data.stats.updates;
+            }
+        }
+    });
 }
 
 /**
@@ -228,6 +253,12 @@ function initializeControls() {
     btnGetRobotParams.addEventListener('click', getRobotParameters);
     btnApplyRobotParams.addEventListener('click', applyRobotParameters);
     btnSaveRobotParams.addEventListener('click', saveRobotParameters);
+
+    // Map control buttons (Phase 5)
+    const btnClearMap = document.getElementById('btn-clear-map');
+    if (btnClearMap) {
+        btnClearMap.addEventListener('click', clearOccupancyMap);
+    }
 
     // Request initial status on startup
     setTimeout(() => {
@@ -656,6 +687,21 @@ function zeroEncoders() {
     if (confirm('Zero Arduino encoders and reset all odometry to origin?')) {
         console.log('Zeroing encoders and resetting pose...');
         socket.emit('zero_encoders');
+    }
+}
+
+/**
+ * Clear occupancy grid map (Phase 5)
+ */
+function clearOccupancyMap() {
+    if (!socket || !isConnected) {
+        alert('Not connected to server');
+        return;
+    }
+
+    if (confirm('Clear the occupancy grid map? This will reset all mapping data.')) {
+        console.log('Clearing occupancy map...');
+        socket.emit('clear_map');
     }
 }
 

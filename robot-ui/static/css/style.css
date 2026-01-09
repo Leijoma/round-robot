@@ -803,6 +803,53 @@ body {
     margin-left: auto;
 }
 
+/* Occupancy Grid Map Legend (Phase 5) */
+.map-legend {
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    margin-left: auto;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.legend-color {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid #333;
+    border-radius: 2px;
+}
+
+.legend-free {
+    background-color: #FFFFFF;
+}
+
+.legend-unknown {
+    background-color: #C0C0C0;
+}
+
+.legend-occupied {
+    background-color: #000000;
+}
+
+.map-stats {
+    font-size: 0.75rem;
+    color: #999;
+}
+
+.map-stats #map-scans,
+.map-stats #map-updates {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
 .map-canvas-container {
     display: flex;
     justify-content: center;
