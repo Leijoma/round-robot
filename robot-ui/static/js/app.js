@@ -271,6 +271,21 @@ function initializeControls() {
         btnApplyOrigin.addEventListener('click', applyMapOrigin);
     }
 
+    // Pose toggle buttons (Phase 5)
+    const btnToggleIcp = document.getElementById('btn-toggle-icp');
+    const btnToggleHostDr = document.getElementById('btn-toggle-host-dr');
+    const btnToggleArduino = document.getElementById('btn-toggle-arduino');
+
+    if (btnToggleIcp) {
+        btnToggleIcp.addEventListener('click', () => togglePose('icp'));
+    }
+    if (btnToggleHostDr) {
+        btnToggleHostDr.addEventListener('click', () => togglePose('host_dr'));
+    }
+    if (btnToggleArduino) {
+        btnToggleArduino.addEventListener('click', () => togglePose('arduino'));
+    }
+
     // Request initial status on startup
     setTimeout(() => {
         if (isConnected) {
@@ -787,6 +802,49 @@ function updateCoverageText(xOffset, yOffset) {
 
     const coverageText = document.getElementById('origin-coverage');
     coverageText.textContent = `Coverage: X: ${xMin.toFixed(1)}m to ${xMax.toFixed(1)}m, Y: ${yMin.toFixed(1)}m to ${yMax.toFixed(1)}m`;
+}
+
+/**
+ * Toggle pose visualization on map (Phase 5)
+ */
+function togglePose(poseType) {
+    if (!occupancyMap) return;
+
+    const btnMap = {
+        'icp': document.getElementById('btn-toggle-icp'),
+        'host_dr': document.getElementById('btn-toggle-host-dr'),
+        'arduino': document.getElementById('btn-toggle-arduino')
+    };
+
+    const btn = btnMap[poseType];
+    if (!btn) return;
+
+    // Toggle the state
+    switch(poseType) {
+        case 'icp':
+            occupancyMap.showIcpPose = !occupancyMap.showIcpPose;
+            break;
+        case 'host_dr':
+            occupancyMap.showHostDrPose = !occupancyMap.showHostDrPose;
+            break;
+        case 'arduino':
+            occupancyMap.showArduinoPose = !occupancyMap.showArduinoPose;
+            break;
+    }
+
+    // Update button appearance
+    const isActive = (poseType === 'icp' && occupancyMap.showIcpPose) ||
+                     (poseType === 'host_dr' && occupancyMap.showHostDrPose) ||
+                     (poseType === 'arduino' && occupancyMap.showArduinoPose);
+
+    if (isActive) {
+        btn.classList.add('btn-toggle-active');
+    } else {
+        btn.classList.remove('btn-toggle-active');
+    }
+
+    // Re-render the map
+    occupancyMap.render();
 }
 
 /**

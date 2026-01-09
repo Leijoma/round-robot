@@ -314,6 +314,17 @@ def esp32_communication_thread():
                                 current_time = time.time()
                                 if current_time - last_map_broadcast_time >= 0.5:  # 2 Hz
                                     map_data = occupancy_grid.serialize_for_ui(corrected_pose)
+
+                                    # Add all three pose estimates for visualization
+                                    host_dr_pose = localizer.get_dead_reckoning_pose()
+                                    arduino_pose = localizer.dead_reckoning.last_arduino_pose if localizer.dead_reckoning.last_arduino_pose else None
+
+                                    map_data['poses'] = {
+                                        'icp': {'x': corrected_pose.x, 'y': corrected_pose.y, 'theta': corrected_pose.theta} if corrected_pose else None,
+                                        'host_dr': {'x': host_dr_pose.x, 'y': host_dr_pose.y, 'theta': host_dr_pose.theta} if host_dr_pose else None,
+                                        'arduino': {'x': arduino_pose.x, 'y': arduino_pose.y, 'theta': arduino_pose.theta} if arduino_pose else None
+                                    }
+
                                     socketio.emit('map_update', map_data)
                                     last_map_broadcast_time = current_time
 

@@ -35,8 +35,10 @@ class OccupancyMapRenderer {
             free: '#FFFFFF',        // White - free space
             unknown: '#C0C0C0',     // Light gray - unknown
             occupied: '#000000',    // Black - obstacles
-            robot: '#00FF00',       // Green - robot
+            robot: '#00FF00',       // Green - robot (ICP pose)
             robotOutline: '#008000', // Dark green - robot outline
+            hostDr: '#0000FF',      // Blue - host dead reckoning
+            arduino: '#FF00FF',     // Magenta - Arduino odometry
             gridLines: '#E0E0E0',   // Very light gray - grid lines
             centerCross: '#FF0000', // Red - origin marker
             background: '#F5F5F5'   // Off-white background
@@ -46,6 +48,14 @@ class OccupancyMapRenderer {
         this.showGridLines = true;
         this.showOrigin = true;
         this.robotSize = 15;  // pixels
+
+        // Pose visualization toggles
+        this.showIcpPose = true;
+        this.showHostDrPose = true;
+        this.showArduinoPose = true;
+
+        // Pose data
+        this.poses = null;
 
         // Statistics
         this.lastUpdateTime = 0;
@@ -74,6 +84,9 @@ class OccupancyMapRenderer {
         this.originOffsetY = mapData.origin_offset_y || 0.0;
         this.grid = mapData.grid;
         this.robotPose = mapData.robot_pose;
+
+        // Update poses (ICP, Host DR, Arduino)
+        this.poses = mapData.poses || null;
 
         // Update statistics
         this.lastUpdateTime = Date.now();
@@ -112,8 +125,26 @@ class OccupancyMapRenderer {
             this.drawOrigin(cellWidth, cellHeight);
         }
 
-        // Draw robot pose
-        if (this.robotPose) {
+        // Draw all pose estimates
+        if (this.poses) {
+            // Draw Arduino pose (magenta)
+            if (this.showArduinoPose && this.poses.arduino) {
+                this.drawRobotPose(this.poses.arduino, cellWidth, cellHeight, this.colors.arduino, 'Arduino');
+            }
+
+            // Draw Host DR pose (blue)
+            if (this.showHostDrPose && this.poses.host_dr) {
+                this.drawRobotPose(this.poses.host_dr, cellWidth, cellHeight, this.colors.hostDr, 'Host DR');
+            }
+
+            // Draw ICP pose (green) - drawn last so it's on top
+            if (this.showIcpPose && this.poses.icp) {
+                this.drawRobotPose(this.poses.icp, cellWidth, cellHeight, this.colors.robot, 'ICP');
+            }
+        }
+
+        // Legacy: Draw robot pose if poses not available
+        if (!this.poses && this.robotPose) {
             this.drawRobot(this.robotPose, cellWidth, cellHeight);
         }
     }
@@ -238,6 +269,57 @@ class OccupancyMapRenderer {
         this.ctx.lineWidth = 2;
         this.ctx.stroke();
 
+        this.ctx.restore();
+    }
+
+    /**
+     * Draw robot pose with custom color and label
+     * @param {Object} pose - Robot pose {x, y, theta}
+     * @param {number} cellWidth - Cell width in pixels
+     * @param {number} cellHeight - Cell height in pixels
+     * @param {string} color - Fill color for the robot
+     * @param {string} label - Label for the pose (e.g., 'ICP', 'Arduino')
+     */
+    drawRobotPose(pose, cellWidth, cellHeight, color, label) {
+        // Convert world coordinates to pixel coordinates
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+
+        // Grid coordinates (account for origin offset)
+        const gx = this.width / 2 + (pose.x - this.originOffsetX) / this.resolution;
+        const gy = this.height / 2 - (pose.y - this.originOffsetY) / this.resolution;  // Y inverted
+
+        // Pixel coordinates
+        const pixelX = gx * cellWidth;
+        const pixelY = gy * cellHeight;
+
+        // Draw robot as triangle pointing in direction of heading
+        this.ctx.save();
+        this.ctx.translate(pixelX, pixelY);
+        this.ctx.rotate(-pose.theta);  // Negative because canvas Y is down
+
+        // Draw filled triangle (slightly smaller for multiple poses)
+        const size = this.robotSize * 0.8;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.moveTo(size, 0);           // Front point
+        this.ctx.lineTo(-size/2, -size/2);  // Back left
+        this.ctx.lineTo(-size/2, size/2);   // Back right
+        this.ctx.closePath();
+        this.ctx.fill();
+
+        // Draw outline
+        this.ctx.strokeStyle = '#000000';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
+
+        this.ctx.restore();
+
+        // Draw label next to robot
+        this.ctx.save();
+        this.ctx.fillStyle = color;
+        this.ctx.font = '10px Arial';
+        this.ctx.fillText(label, pixelX + 12, pixelY - 12);
         this.ctx.restore();
     }
 
