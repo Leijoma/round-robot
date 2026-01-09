@@ -100,8 +100,8 @@ def init_robot_connection():
         print('✓ Integrated localizer initialized (dead reckoning + ICP)')
 
         # Initialize occupancy grid (Phase 5)
-        occupancy_grid = OccupancyGrid(width=100, height=100, resolution=0.05)
-        print('✓ Occupancy grid initialized (100×100 @ 5cm resolution, 5m×5m coverage)')
+        occupancy_grid = OccupancyGrid(width=140, height=140, resolution=0.05)
+        print('✓ Occupancy grid initialized (140×140 @ 5cm resolution, 7m×7m coverage)')
 
         robot_connected = True
 
