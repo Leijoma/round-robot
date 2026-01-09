@@ -963,6 +963,56 @@ def handle_save_robot_params():
         emit('error', {'message': str(e)})
 
 
+@socketio.on('set_map_origin')
+def handle_set_map_origin(data):
+    """Reconfigure occupancy grid with new origin offset"""
+    global occupancy_grid, last_map_broadcast_time
+
+    if occupancy_grid is None:
+        emit('error', {'message': 'Occupancy grid not initialized'})
+        return
+
+    try:
+        origin_offset_x = float(data.get('origin_offset_x', 0.0))
+        origin_offset_y = float(data.get('origin_offset_y', 0.0))
+
+        print(f'Reconfiguring map origin to ({origin_offset_x}, {origin_offset_y})')
+
+        # Create new occupancy grid with new offset
+        occupancy_grid = OccupancyGrid(
+            width=140,
+            height=140,
+            resolution=0.05,
+            origin_offset_x=origin_offset_x,
+            origin_offset_y=origin_offset_y
+        )
+
+        # Calculate coverage
+        grid_size = 7.0
+        half_grid = grid_size / 2
+        x_min = origin_offset_x - half_grid
+        x_max = origin_offset_x + half_grid
+        y_min = origin_offset_y - half_grid
+        y_max = origin_offset_y + half_grid
+
+        print(f'  Map coverage: X: {x_min:.1f}m to {x_max:.1f}m, Y: {y_min:.1f}m to {y_max:.1f}m')
+
+        # Get current pose from localizer
+        corrected_pose = None
+        if localizer:
+            corrected_pose = localizer.get_corrected_pose()
+
+        # Broadcast new map to all clients
+        map_data = occupancy_grid.serialize_for_ui(corrected_pose)
+        socketio.emit('map_update', map_data, broadcast=True)
+        last_map_broadcast_time = time.time()
+
+        emit('status', {'message': f'Map origin set to ({origin_offset_x}, {origin_offset_y})'})
+    except Exception as e:
+        print(f'Error setting map origin: {e}')
+        emit('error', {'message': str(e)})
+
+
 @socketio.on('clear_map')
 def handle_clear_map():
     """Clear occupancy grid map"""

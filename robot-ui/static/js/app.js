@@ -260,6 +260,17 @@ function initializeControls() {
         btnClearMap.addEventListener('click', clearOccupancyMap);
     }
 
+    // Map origin configuration (Phase 5)
+    const presetButtons = document.querySelectorAll('.btn-preset');
+    presetButtons.forEach(btn => {
+        btn.addEventListener('click', () => handleOriginPreset(btn.dataset.preset));
+    });
+
+    const btnApplyOrigin = document.getElementById('btn-apply-origin');
+    if (btnApplyOrigin) {
+        btnApplyOrigin.addEventListener('click', applyMapOrigin);
+    }
+
     // Request initial status on startup
     setTimeout(() => {
         if (isConnected) {
@@ -703,6 +714,79 @@ function clearOccupancyMap() {
         console.log('Clearing occupancy map...');
         socket.emit('clear_map');
     }
+}
+
+/**
+ * Handle map origin preset selection (Phase 5)
+ */
+function handleOriginPreset(preset) {
+    const inputsDiv = document.getElementById('origin-inputs');
+    const xInput = document.getElementById('origin-offset-x');
+    const yInput = document.getElementById('origin-offset-y');
+    const coverageText = document.getElementById('origin-coverage');
+
+    // Update button active state
+    document.querySelectorAll('.btn-preset').forEach(btn => {
+        btn.classList.remove('btn-preset-active');
+    });
+    event.target.classList.add('btn-preset-active');
+
+    switch(preset) {
+        case 'centered':
+            xInput.value = 0.0;
+            yInput.value = 0.0;
+            inputsDiv.style.display = 'none';
+            updateCoverageText(0.0, 0.0);
+            applyMapOrigin();
+            break;
+        case 'corner':
+            xInput.value = -2.5;
+            yInput.value = -2.5;
+            inputsDiv.style.display = 'none';
+            updateCoverageText(-2.5, -2.5);
+            applyMapOrigin();
+            break;
+        case 'custom':
+            inputsDiv.style.display = 'flex';
+            break;
+    }
+}
+
+/**
+ * Apply map origin offset (Phase 5)
+ */
+function applyMapOrigin() {
+    if (!socket || !isConnected) {
+        alert('Not connected to server');
+        return;
+    }
+
+    const xOffset = parseFloat(document.getElementById('origin-offset-x').value);
+    const yOffset = parseFloat(document.getElementById('origin-offset-y').value);
+
+    console.log(`Setting map origin offset to (${xOffset}, ${yOffset})`);
+    socket.emit('set_map_origin', {
+        origin_offset_x: xOffset,
+        origin_offset_y: yOffset
+    });
+
+    updateCoverageText(xOffset, yOffset);
+}
+
+/**
+ * Update coverage text display (Phase 5)
+ */
+function updateCoverageText(xOffset, yOffset) {
+    const gridSize = 7.0; // 7m × 7m grid
+    const halfGrid = gridSize / 2;
+
+    const xMin = xOffset - halfGrid;
+    const xMax = xOffset + halfGrid;
+    const yMin = yOffset - halfGrid;
+    const yMax = yOffset + halfGrid;
+
+    const coverageText = document.getElementById('origin-coverage');
+    coverageText.textContent = `Coverage: X: ${xMin.toFixed(1)}m to ${xMax.toFixed(1)}m, Y: ${yMin.toFixed(1)}m to ${yMax.toFixed(1)}m`;
 }
 
 /**

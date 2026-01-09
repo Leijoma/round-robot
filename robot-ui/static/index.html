@@ -224,6 +224,30 @@
                 </div>
             </div>
 
+            <!-- Map Origin Configuration -->
+            <div class="map-origin-config">
+                <label class="config-label">Map Origin:</label>
+                <div class="origin-presets">
+                    <button class="btn-preset" data-preset="centered">Centered</button>
+                    <button class="btn-preset btn-preset-active" data-preset="corner">Corner Start</button>
+                    <button class="btn-preset" data-preset="custom">Custom</button>
+                </div>
+                <div class="origin-inputs" id="origin-inputs" style="display: none;">
+                    <div class="input-group">
+                        <label>X Offset (m):</label>
+                        <input type="number" id="origin-offset-x" step="0.5" value="-2.5" min="-3.5" max="3.5">
+                    </div>
+                    <div class="input-group">
+                        <label>Y Offset (m):</label>
+                        <input type="number" id="origin-offset-y" step="0.5" value="-2.5" min="-3.5" max="3.5">
+                    </div>
+                    <button id="btn-apply-origin" class="btn-primary">Apply Origin</button>
+                </div>
+                <div class="origin-info">
+                    <small id="origin-coverage">Coverage: X: -2.5m to +4.5m, Y: -2.5m to +4.5m</small>
+                </div>
+            </div>
+
             <!-- Occupancy Grid Canvas -->
             <div class="map-canvas-container">
                 <canvas id="map-canvas" width="700" height="700"></canvas>
