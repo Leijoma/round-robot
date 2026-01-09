@@ -11,14 +11,18 @@
     <!-- Status Bar -->
     <header class="status-bar">
         <h1>Robot Control Dashboard</h1>
+        <div class="tab-buttons">
+            <button class="tab-btn tab-btn-active" data-tab="map-data">Map & Data</button>
+            <button class="tab-btn" data-tab="settings">Settings</button>
+        </div>
         <div class="status-info">
             <span id="esp32-status" class="status-offline">ESP32: Connecting...</span>
             <span id="latency">Latency: --ms</span>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="dashboard">
+    <!-- Main Content - Map & Data Tab -->
+    <main class="dashboard tab-content" id="tab-map-data">
         <!-- Motor Control Panel -->
         <section class="panel control-panel">
             <h2>Motor Control</h2>
@@ -99,123 +103,6 @@
             <div class="keyboard-hint">
                 <small>⌨️ Keyboard: WASD or Arrow Keys | SPACE to stop</small>
             </div>
-        </section>
-
-        <!-- PID & Deadband Configuration Panel -->
-        <section class="panel config-panel">
-            <h2>PID & Deadband Config</h2>
-
-            <div class="config-section">
-                <h3>PID Parameters - Left Motor</h3>
-                <div class="config-grid">
-                    <div class="config-item">
-                        <label for="pid-left-kp">Kp:</label>
-                        <input type="number" id="pid-left-kp" step="0.1" value="50.0">
-                    </div>
-                    <div class="config-item">
-                        <label for="pid-left-ki">Ki:</label>
-                        <input type="number" id="pid-left-ki" step="0.1" value="60.0">
-                    </div>
-                    <div class="config-item">
-                        <label for="pid-left-kd">Kd:</label>
-                        <input type="number" id="pid-left-kd" step="0.1" value="0.0">
-                    </div>
-                </div>
-            </div>
-
-            <div class="config-section">
-                <h3>PID Parameters - Right Motor</h3>
-                <div class="config-grid">
-                    <div class="config-item">
-                        <label for="pid-right-kp">Kp:</label>
-                        <input type="number" id="pid-right-kp" step="0.1" value="50.0">
-                    </div>
-                    <div class="config-item">
-                        <label for="pid-right-ki">Ki:</label>
-                        <input type="number" id="pid-right-ki" step="0.1" value="20.0">
-                    </div>
-                    <div class="config-item">
-                        <label for="pid-right-kd">Kd:</label>
-                        <input type="number" id="pid-right-kd" step="0.1" value="0.0">
-                    </div>
-                </div>
-                <button id="btn-apply-pid" class="btn-config">Apply PID</button>
-            </div>
-
-            <div class="config-section">
-                <h3>Deadband (PWM offset)</h3>
-                <div class="config-grid">
-                    <div class="config-item">
-                        <label for="db-left-fwd">Left Fwd:</label>
-                        <input type="number" id="db-left-fwd" step="1" value="50">
-                    </div>
-                    <div class="config-item">
-                        <label for="db-left-rev">Left Rev:</label>
-                        <input type="number" id="db-left-rev" step="1" value="50">
-                    </div>
-                    <div class="config-item">
-                        <label for="db-right-fwd">Right Fwd:</label>
-                        <input type="number" id="db-right-fwd" step="1" value="35">
-                    </div>
-                    <div class="config-item">
-                        <label for="db-right-rev">Right Rev:</label>
-                        <input type="number" id="db-right-rev" step="1" value="35">
-                    </div>
-                </div>
-                <button id="btn-apply-deadband" class="btn-config">Apply Deadband</button>
-            </div>
-
-            <div class="config-actions">
-                <button id="btn-read-config" class="btn-primary">Read from Arduino</button>
-                <button id="btn-save-config" class="btn-save">Save to EEPROM</button>
-            </div>
-
-            <div id="config-status" class="config-status">Ready</div>
-        </section>
-
-        <!-- Robot Parameters Panel -->
-        <section class="panel robot-params-panel">
-            <h2>Robot Parameters</h2>
-
-            <div class="config-section">
-                <h3>Physical Dimensions</h3>
-                <div class="config-grid">
-                    <div class="config-item">
-                        <label for="param-wheel-dia">Wheel Diameter (mm):</label>
-                        <input type="number" id="param-wheel-dia" step="0.1" value="80.0">
-                    </div>
-                    <div class="config-item">
-                        <label for="param-wheelbase">Wheelbase (mm):</label>
-                        <input type="number" id="param-wheelbase" step="0.1" value="244.0">
-                    </div>
-                    <div class="config-item">
-                        <label for="param-ticks-per-rev">Ticks/Rev:</label>
-                        <input type="number" id="param-ticks-per-rev" step="1" value="360">
-                    </div>
-                </div>
-            </div>
-
-            <div class="config-section">
-                <h3>LIDAR Offset</h3>
-                <div class="config-grid">
-                    <div class="config-item">
-                        <label for="param-lidar-x">Forward (mm):</label>
-                        <input type="number" id="param-lidar-x" step="0.1" value="10.0">
-                    </div>
-                    <div class="config-item">
-                        <label for="param-lidar-y">Lateral (mm):</label>
-                        <input type="number" id="param-lidar-y" step="0.1" value="0.0">
-                    </div>
-                </div>
-            </div>
-
-            <div class="config-actions">
-                <button id="btn-get-robot-params" class="btn-primary">Read Current</button>
-                <button id="btn-apply-robot-params" class="btn-config">Apply Changes</button>
-                <button id="btn-save-robot-params" class="btn-save">Save to File</button>
-            </div>
-
-            <div id="robot-params-status" class="config-status">Ready</div>
         </section>
 
         <!-- Robot Pose Display Panel -->
@@ -317,7 +204,7 @@
 
             <!-- Polar Plot Canvas -->
             <div class="polar-plot-container">
-                <canvas id="lidar-canvas" width="500" height="500"></canvas>
+                <canvas id="lidar-canvas" width="380" height="380"></canvas>
             </div>
         </section>
 
@@ -335,8 +222,139 @@
 
             <!-- Map Canvas -->
             <div class="map-canvas-container">
-                <canvas id="map-canvas" width="600" height="600"></canvas>
+                <canvas id="map-canvas" width="800" height="800"></canvas>
             </div>
+        </section>
+    </main>
+
+    <!-- Settings Tab -->
+    <main class="dashboard tab-content" id="tab-settings" style="display: none;">
+        <!-- PID & Deadband Configuration Panel -->
+        <section class="panel config-panel">
+            <h2>PID & Deadband Config</h2>
+
+            <div class="config-section">
+                <h3>PID Parameters - Left Motor</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="pid-left-kp">Kp:</label>
+                        <input type="number" id="pid-left-kp" step="0.1" value="50.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="pid-left-ki">Ki:</label>
+                        <input type="number" id="pid-left-ki" step="0.1" value="60.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="pid-left-kd">Kd:</label>
+                        <input type="number" id="pid-left-kd" step="0.1" value="0.0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h3>PID Parameters - Right Motor</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="pid-right-kp">Kp:</label>
+                        <input type="number" id="pid-right-kp" step="0.1" value="50.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="pid-right-ki">Ki:</label>
+                        <input type="number" id="pid-right-ki" step="0.1" value="20.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="pid-right-kd">Kd:</label>
+                        <input type="number" id="pid-right-kd" step="0.1" value="0.0">
+                    </div>
+                </div>
+                <button id="btn-apply-pid" class="btn-config">Apply PID</button>
+            </div>
+
+            <div class="config-section">
+                <h3>Deadband (PWM offset)</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="db-left-fwd">Left Fwd:</label>
+                        <input type="number" id="db-left-fwd" step="1" value="50">
+                    </div>
+                    <div class="config-item">
+                        <label for="db-left-rev">Left Rev:</label>
+                        <input type="number" id="db-left-rev" step="1" value="50">
+                    </div>
+                    <div class="config-item">
+                        <label for="db-right-fwd">Right Fwd:</label>
+                        <input type="number" id="db-right-fwd" step="1" value="35">
+                    </div>
+                    <div class="config-item">
+                        <label for="db-right-rev">Right Rev:</label>
+                        <input type="number" id="db-right-rev" step="1" value="35">
+                    </div>
+                </div>
+                <button id="btn-apply-deadband" class="btn-config">Apply Deadband</button>
+            </div>
+
+            <div class="config-section">
+                <h3>Heading Hold / Angular Velocity Feedback</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="heading-hold-kp">Kp Gain:</label>
+                        <input type="number" id="heading-hold-kp" step="0.1" value="15.0">
+                    </div>
+                </div>
+                <button id="btn-apply-heading-hold" class="btn-config">Apply Heading Hold Kp</button>
+            </div>
+
+            <div class="config-actions">
+                <button id="btn-read-config" class="btn-primary">Read from Arduino</button>
+                <button id="btn-save-config" class="btn-save">Save to EEPROM</button>
+            </div>
+
+            <div id="config-status" class="config-status">Ready</div>
+        </section>
+
+        <!-- Robot Parameters Panel -->
+        <section class="panel robot-params-panel">
+            <h2>Robot Parameters</h2>
+
+            <div class="config-section">
+                <h3>Physical Dimensions</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="param-wheel-dia">Wheel Diameter (mm):</label>
+                        <input type="number" id="param-wheel-dia" step="0.1" value="80.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="param-wheelbase">Wheelbase (mm):</label>
+                        <input type="number" id="param-wheelbase" step="0.1" value="244.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="param-ticks-per-rev">Ticks/Rev:</label>
+                        <input type="number" id="param-ticks-per-rev" step="1" value="360">
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h3>LIDAR Offset</h3>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="param-lidar-x">Forward (mm):</label>
+                        <input type="number" id="param-lidar-x" step="0.1" value="10.0">
+                    </div>
+                    <div class="config-item">
+                        <label for="param-lidar-y">Lateral (mm):</label>
+                        <input type="number" id="param-lidar-y" step="0.1" value="0.0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-actions">
+                <button id="btn-get-robot-params" class="btn-primary">Read Current</button>
+                <button id="btn-apply-robot-params" class="btn-config">Apply Changes</button>
+                <button id="btn-save-robot-params" class="btn-save">Save to File</button>
+            </div>
+
+            <div id="robot-params-status" class="config-status">Ready</div>
         </section>
     </main>
 

@@ -3,7 +3,7 @@ Robot Control UI Server
 Flask + SocketIO server for real-time robot control
 """
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request
 from flask_socketio import SocketIO, emit
 import threading
 import time
@@ -14,7 +14,7 @@ import numpy as np
 # Add server directory to Python path for robotlink import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from robotlink import RobotLink, MessageType, OdomPayload, LidarScanPayload
+from robotlink import RobotLink, MessageType, OdomPayload, LidarScanPayload, AckPayload, NackPayload, StatusExtendedPayload
 
 # SLAM imports (Phase 2, 3, & 4 Integration)
 from slam.data_sync import DataSynchronizer
@@ -23,7 +23,7 @@ from slam.motion_model import RobotParameters
 from slam.localization import IntegratedLocalizer
 
 # Configuration
-ESP32_HOST = '192.168.68.74'
+ESP32_HOST = '192.168.68.73'
 ESP32_PORT = 5000
 
 # Flask app setup
@@ -58,9 +58,10 @@ command_log = {
     'commanded_vel_right': 0.0
 }
 
-# Robot configuration
-WHEEL_DIAMETER = 0.067  # meters (67mm)
-TICKS_PER_REV = 48 * 120  # 48 encoder ticks * 120:1 gear ratio = 5760
+# Robot configuration (legacy - not used, real values loaded from robot_config.json)
+# These are kept for backwards compatibility but should match config file:
+WHEEL_DIAMETER = 0.079  # meters (79mm, measured with robot weight)
+TICKS_PER_REV = 714  # 2X quadrature decoding, calibrated
 METERS_PER_TICK = (WHEEL_DIAMETER * 3.14159) / TICKS_PER_REV
 
 def init_robot_connection():
@@ -96,11 +97,29 @@ def init_robot_connection():
         print('✓ Integrated localizer initialized (dead reckoning + ICP)')
 
         robot_connected = True
+
+        # Broadcast connection status to all connected clients
+        socketio.emit('connection_status', {
+            'status': 'connected',
+            'esp32': True,
+            'esp32_host': ESP32_HOST,
+            'esp32_port': ESP32_PORT
+        })
+
         return True
 
     except Exception as e:
         print(f'✗ Failed to connect to ESP32: {e}')
         robot_connected = False
+
+        # Broadcast connection failure to all connected clients
+        socketio.emit('connection_status', {
+            'status': 'disconnected',
+            'esp32': False,
+            'esp32_host': ESP32_HOST,
+            'esp32_port': ESP32_PORT
+        })
+
         return False
 
 
@@ -173,8 +192,8 @@ def esp32_communication_thread():
                         socketio.emit('pose_update', {
                             'dead_reckoning': {
                                 'x': dr_pose.x,
-                                'y': dr_pose.y,
-                                'theta_deg': np.rad2deg(dr_pose.theta)
+                                'y': -dr_pose.y,  # Negate Y to fix mirroring
+                                'theta_deg': -np.rad2deg(dr_pose.theta)  # Negate heading to fix mirroring
                             },
                             'arduino_odo': {
                                 'x': odom.x_mm / 1000.0,  # Convert mm to meters
@@ -183,8 +202,8 @@ def esp32_communication_thread():
                             },
                             'icp_corrected': {
                                 'x': icp_pose.x,
-                                'y': icp_pose.y,
-                                'theta_deg': np.rad2deg(icp_pose.theta)
+                                'y': -icp_pose.y,  # Negate Y to fix mirroring
+                                'theta_deg': -np.rad2deg(icp_pose.theta)  # Negate heading to fix mirroring
                             },
                             'drift': {
                                 'position': drift['distance_drift'],
@@ -291,10 +310,24 @@ def esp32_communication_thread():
                           f'DB=[{status.deadband[0]:.1f}, {status.deadband[1]:.1f}, '
                           f'{status.deadband[2]:.1f}, {status.deadband[3]:.1f}]')
 
+                    # Note: Arduino currently only sends pidLeft values in STATUS message
+                    # Both motors may have different PID values but we only receive pidLeft
+                    # TODO: Add MSG_STATUS_EXTENDED to get per-motor PID values
+
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('robot_status', {
                         'pid': {
                             'kp': status.kp,
+                            'ki': status.ki,
+                            'kd': status.kd
+                        },
+                        'pid_left': {
+                            'kp': status.kp,
+                            'ki': status.ki,
+                            'kd': status.kd
+                        },
+                        'pid_right': {
+                            'kp': status.kp,  # Same as left - not actually from right motor
                             'ki': status.ki,
                             'kd': status.kd
                         },
@@ -307,13 +340,101 @@ def esp32_communication_thread():
                         'pid_enabled': status.pid_enabled,
                         'stream_enabled': status.stream_enabled,
                         'stream_interval': status.stream_interval,
-                        'uptime': status.uptime
+                        'uptime': status.uptime,
+                        'heading_hold_kp': 15.0  # Default value - not yet sent by Arduino
                     })
 
                 except Exception as e:
                     print(f'Error parsing STATUS: {e}')
                     import traceback
                     traceback.print_exc()
+
+            # Handle STATUS_EXTENDED messages (per-motor PID status)
+            elif msg_type == MessageType.MSG_STATUS_EXTENDED:
+                try:
+                    status = StatusExtendedPayload.unpack(payload)
+
+                    print(f'Received STATUS_EXTENDED: '
+                          f'L({status.left_kp:.2f}, {status.left_ki:.2f}, {status.left_kd:.2f}) '
+                          f'R({status.right_kp:.2f}, {status.right_ki:.2f}, {status.right_kd:.2f}) '
+                          f'HeadingHoldKp={status.heading_hold_kp:.2f}')
+
+                    # Broadcast to all connected WebSocket clients
+                    socketio.emit('robot_status', {
+                        'pid_left': {
+                            'kp': status.left_kp,
+                            'ki': status.left_ki,
+                            'kd': status.left_kd
+                        },
+                        'pid_right': {
+                            'kp': status.right_kp,
+                            'ki': status.right_ki,
+                            'kd': status.right_kd
+                        },
+                        'deadband': {
+                            'left_forward': status.deadband[0],
+                            'left_reverse': status.deadband[1],
+                            'right_forward': status.deadband[2],
+                            'right_reverse': status.deadband[3]
+                        },
+                        'heading_hold_kp': status.heading_hold_kp,
+                        'pid_enabled': status.pid_enabled,
+                        'stream_enabled': status.stream_enabled,
+                        'stream_interval': status.stream_interval,
+                        'uptime': status.uptime
+                    })
+
+                except Exception as e:
+                    print(f'Error parsing STATUS_EXTENDED: {e}')
+                    import traceback
+                    traceback.print_exc()
+
+            # Handle ACK messages
+            elif msg_type == MessageType.MSG_ACK:
+                try:
+                    ack = AckPayload.unpack(payload)
+                    msg_name = MessageType(ack.original_msg_type).name if ack.original_msg_type in MessageType._value2member_map_ else f'0x{ack.original_msg_type:02X}'
+                    status_str = 'SUCCESS' if ack.status == 0 else f'ERROR {ack.status}'
+                    print(f'✓ ACK received for {msg_name}: {status_str}')
+
+                    # Broadcast to UI
+                    socketio.emit('command_ack', {
+                        'message_type': msg_name,
+                        'success': ack.status == 0,
+                        'error_code': ack.status
+                    })
+
+                except Exception as e:
+                    print(f'Error parsing ACK: {e}')
+
+            # Handle NACK messages
+            elif msg_type == MessageType.MSG_NACK:
+                try:
+                    nack = NackPayload.unpack(payload)
+                    msg_name = MessageType(nack.original_msg_type).name if nack.original_msg_type in MessageType._value2member_map_ else f'0x{nack.original_msg_type:02X}'
+                    print(f'✗ NACK received for {msg_name}: Error code {nack.error_code}')
+
+                    # Error code descriptions
+                    error_descriptions = {
+                        0x01: 'Invalid payload',
+                        0x02: 'Out of range',
+                        0x03: 'EEPROM write failed',
+                        0x04: 'EEPROM read failed',
+                        0x05: 'Not implemented',
+                        0x06: 'Timeout',
+                        0xFF: 'Unknown error'
+                    }
+                    error_desc = error_descriptions.get(nack.error_code, f'Error {nack.error_code}')
+
+                    # Broadcast to UI
+                    socketio.emit('command_nack', {
+                        'message_type': msg_name,
+                        'error_code': nack.error_code,
+                        'error_description': error_desc
+                    })
+
+                except Exception as e:
+                    print(f'Error parsing NACK: {e}')
 
             # Log synchronizer and localization stats every 10 seconds
             if data_synchronizer and (time.time() - last_stats_time) >= 10.0:
@@ -358,8 +479,9 @@ def esp32_communication_thread():
 @socketio.on('connect')
 def handle_connect():
     """Client connected to WebSocket"""
-    client_id = request.sid if 'request' in dir() else 'unknown'
-    print(f'Client connected: {client_id}')
+    client_id = request.sid
+    print(f'✓ Client connected: {client_id}')
+    print(f'  ESP32 status: {"Connected" if robot_connected else "Disconnected"}')
 
     # Send connection status
     emit('connection_status', {
@@ -368,13 +490,14 @@ def handle_connect():
         'esp32_host': ESP32_HOST,
         'esp32_port': ESP32_PORT
     })
+    print(f'  → Sent connection_status: esp32={robot_connected}')
 
 
 @socketio.on('disconnect')
 def handle_disconnect():
     """Client disconnected from WebSocket"""
-    client_id = request.sid if 'request' in dir() else 'unknown'
-    print(f'Client disconnected: {client_id}')
+    client_id = request.sid
+    print(f'✗ Client disconnected: {client_id}')
 
 
 @socketio.on('motor_command')
@@ -574,6 +697,25 @@ def handle_set_deadband(data):
         emit('error', {'message': str(e)})
 
 
+@socketio.on('set_heading_hold_kp')
+def handle_set_heading_hold_kp(data):
+    """Set heading hold / angular velocity feedback gain"""
+    global robot
+
+    if robot is None:
+        emit('error', {'message': 'ESP32 not connected'})
+        return
+
+    try:
+        kp = float(data.get('kp'))
+        robot.set_heading_hold_kp(kp)
+        print(f'Set Heading Hold Kp: {kp}')
+
+    except Exception as e:
+        print(f'Error setting heading hold Kp: {e}')
+        emit('error', {'message': str(e)})
+
+
 @socketio.on('save_config')
 def handle_save_config():
     """Save configuration to EEPROM"""
@@ -721,23 +863,41 @@ def handle_get_robot_params():
 
 @socketio.on('set_robot_params')
 def handle_set_robot_params(data):
-    """Update robot parameters"""
-    global localizer
+    """Update robot parameters on both host and Arduino"""
+    global localizer, robot
 
     if localizer is None:
         emit('error', {'message': 'Localizer not initialized'})
         return
 
     try:
-        # Update parameters
-        params = localizer.dead_reckoning.motion_model.params
-        params.wheel_diameter = float(data.get('wheel_diameter_mm', 80)) / 1000.0
-        params.wheelbase = float(data.get('wheelbase_mm', 244)) / 1000.0
-        params.ticks_per_revolution = int(data.get('ticks_per_revolution', 360))
-        params.lidar_offset_x = float(data.get('lidar_offset_x_mm', 10)) / 1000.0
-        params.lidar_offset_y = float(data.get('lidar_offset_y_mm', 0)) / 1000.0
+        # Extract parameters (convert mm to meters)
+        wheel_diameter = float(data.get('wheel_diameter_mm', 80)) / 1000.0
+        wheelbase = float(data.get('wheelbase_mm', 244)) / 1000.0
+        ticks_per_rev = float(data.get('ticks_per_revolution', 360))
+        lidar_offset_x = float(data.get('lidar_offset_x_mm', 10)) / 1000.0
+        lidar_offset_y = float(data.get('lidar_offset_y_mm', 0)) / 1000.0
 
-        print(f'Updated robot parameters: {params}')
+        # Update HOST parameters (for host odometry)
+        params = localizer.dead_reckoning.motion_model.params
+        params.wheel_diameter = wheel_diameter
+        params.wheelbase = wheelbase
+        params.ticks_per_revolution = int(ticks_per_rev)
+        params.lidar_offset_x = lidar_offset_x
+        params.lidar_offset_y = lidar_offset_y
+
+        print(f'Updated HOST robot parameters: {params}')
+
+        # Send to ARDUINO (for Arduino odometry)
+        if robot is not None:
+            success = robot.set_robot_params(wheel_diameter, wheelbase, ticks_per_rev)
+            if success:
+                print(f'Sent robot params to Arduino: wheel_diam={wheel_diameter*1000:.1f}mm, '
+                      f'wheelbase={wheelbase*1000:.1f}mm, ticks/rev={ticks_per_rev:.0f}')
+            else:
+                print('Warning: Failed to send robot params to Arduino')
+        else:
+            print('Warning: Robot not connected, params only updated on host')
 
         # Send back updated parameters
         emit('robot_params', params.to_dict())

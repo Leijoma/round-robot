@@ -5,9 +5,9 @@ Implements forward and inverse kinematics for a differential drive robot.
 Handles straight line motion, curved motion, and motion uncertainty.
 
 Physical Parameters (from robot specifications):
-- Wheel diameter: 80mm
+- Wheel diameter: 79mm (measured with robot weight, 82.5mm unloaded)
 - Wheelbase (distance between wheels): 244mm
-- Encoder ticks per revolution: 360
+- Encoder ticks per revolution: 714 (2X quadrature decoding, calibrated)
 - LIDAR offset: 10mm forward from wheel axle centerline
 """
 
@@ -34,9 +34,9 @@ class RobotParameters:
         lidar_offset_x: LIDAR offset forward from wheel axle (meters, positive = forward)
         lidar_offset_y: LIDAR offset lateral from centerline (meters, positive = right)
     """
-    wheel_diameter: float = 0.080  # meters (80mm)
+    wheel_diameter: float = 0.079  # meters (79mm, measured with robot weight)
     wheelbase: float = 0.244  # meters (244mm)
-    ticks_per_revolution: int = 360
+    ticks_per_revolution: int = 714  # 2X quadrature decoding, calibrated
     lidar_offset_x: float = 0.010  # meters (10mm forward)
     lidar_offset_y: float = 0.0  # meters (centered laterally)
 

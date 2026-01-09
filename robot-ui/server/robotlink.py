@@ -46,14 +46,19 @@ class MessageType(IntEnum):
     MSG_STOP = 0x1A  # FIXED: Was 0x15, should be 0x1A
     MSG_RESET_POSE = 0x1B  # Reset pose to origin without zeroing encoders
     MSG_SET_PID_PER_MOTOR = 0x1C  # Set per-motor PID parameters (left/right separate)
+    MSG_SET_HEADING_HOLD_KP = 0x1D  # Set angular velocity feedback gain
+    MSG_STATUS_EXTENDED = 0x1E  # Extended status with per-motor PID and heading hold Kp
+    MSG_ACK = 0x1F  # Acknowledgment of received command
 
     # Lidar Messages
     MSG_LIDAR_SCAN = 0x20      # ESP32 -> Host
     MSG_LIDAR_STATUS = 0x21    # ESP32 -> Host
     MSG_LIDAR_ENABLE = 0x22    # Host -> ESP32
     MSG_LIDAR_SET_RPM = 0x23   # Host -> ESP32
+    MSG_SET_ROBOT_PARAMS = 0x24  # Set robot geometry parameters
 
-    # Ping/Pong
+    # Ping/Pong and Error
+    MSG_NACK = 0x7D  # Negative acknowledgment (error)
     MSG_PING = 0x7E
     MSG_PONG = 0x7F
 
@@ -127,7 +132,7 @@ class OdomPayload:
 
 @dataclass
 class StatusPayload:
-    """Robot status information"""
+    """Robot status information (legacy - only left motor PID)"""
     kp: float
     ki: float
     kd: float
@@ -153,6 +158,78 @@ class StatusPayload:
             frames_received=values[10],
             frames_sent=values[11],
             uptime=values[12]
+        )
+
+
+@dataclass
+class StatusExtendedPayload:
+    """Extended robot status with per-motor PID"""
+    left_kp: float
+    left_ki: float
+    left_kd: float
+    right_kp: float
+    right_ki: float
+    right_kd: float
+    deadband: tuple  # (left_fwd, left_rev, right_fwd, right_rev)
+    heading_hold_kp: float
+    pid_enabled: bool
+    stream_enabled: bool
+    stream_interval: int
+    frames_received: int
+    frames_sent: int
+    uptime: int
+
+    @classmethod
+    def unpack(cls, data: bytes) -> 'StatusExtendedPayload':
+        """Unpack StatusExtendedPayload: 12+12+16+4+2+2+12 = 60 bytes"""
+        values = struct.unpack('<fffffffffffBBHIII', data)
+        return cls(
+            left_kp=values[0],
+            left_ki=values[1],
+            left_kd=values[2],
+            right_kp=values[3],
+            right_ki=values[4],
+            right_kd=values[5],
+            deadband=(values[6], values[7], values[8], values[9]),
+            heading_hold_kp=values[10],
+            pid_enabled=bool(values[11]),
+            stream_enabled=bool(values[12]),
+            stream_interval=values[13],
+            frames_received=values[14],
+            frames_sent=values[15],
+            uptime=values[16]
+        )
+
+
+@dataclass
+class AckPayload:
+    """Acknowledgment of received command"""
+    original_msg_type: int  # The message type being acknowledged
+    status: int  # 0=success, non-zero=error code
+
+    @classmethod
+    def unpack(cls, data: bytes) -> 'AckPayload':
+        """Unpack AckPayload: 4 bytes (BBxx)"""
+        values = struct.unpack('<BB', data[:2])
+        return cls(
+            original_msg_type=values[0],
+            status=values[1]
+        )
+
+
+@dataclass
+class NackPayload:
+    """Negative acknowledgment (error)"""
+    original_msg_type: int  # The message type that failed
+    error_code: int  # Error code
+
+    @classmethod
+    def unpack(cls, data: bytes) -> 'NackPayload':
+        """Unpack NackPayload: 4 bytes (BBxx)"""
+        values = struct.unpack('<BB', data[:2])
+        return cls(
+            original_msg_type=values[0],
+            error_code=values[1]
         )
 
 
@@ -426,14 +503,28 @@ class RobotLink:
         payload = struct.pack('<ffff', left_fwd, left_rev, right_fwd, right_rev)
         return self.send_frame(MessageType.MSG_SET_DEADBAND, payload)
 
+    def set_heading_hold_kp(self, kp: float) -> bool:
+        """Set angular velocity feedback gain for heading hold"""
+        payload = struct.pack('<f', kp)
+        return self.send_frame(MessageType.MSG_SET_HEADING_HOLD_KP, payload)
+
+    def set_robot_params(self, wheel_diameter: float, wheelbase: float, ticks_per_rev: float) -> bool:
+        """Set robot geometry parameters (meters, meters, ticks)"""
+        payload = struct.pack('<fff', wheel_diameter, wheelbase, ticks_per_rev)
+        return self.send_frame(MessageType.MSG_SET_ROBOT_PARAMS, payload)
+
     def enable_stream(self, enable: bool, interval_ms: int = 100) -> bool:
         """Enable/disable continuous odometry streaming"""
         payload = struct.pack('<BH', 1 if enable else 0, interval_ms)
         return self.send_frame(MessageType.MSG_ENABLE_STREAM, payload)
 
     def request_status(self) -> bool:
-        """Request current robot status (PID, deadband, etc.)"""
+        """Request current robot status (PID, deadband, etc.) - legacy format"""
         return self.send_frame(MessageType.MSG_STATUS)
+
+    def request_status_extended(self) -> bool:
+        """Request extended robot status with per-motor PID"""
+        return self.send_frame(MessageType.MSG_STATUS_EXTENDED)
 
     def save_config(self) -> bool:
         """Save current configuration to EEPROM"""

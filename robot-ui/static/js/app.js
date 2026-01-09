@@ -21,7 +21,46 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeWebSocket();
     initializeControls();
     initializeKeyboardControls();
+    initializeTabs();
 });
+
+/**
+ * Tab Management
+ */
+function initializeTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    // Show first tab by default
+    document.getElementById('tab-map-data').classList.add('active');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTab = button.getAttribute('data-tab');
+
+            // Hide all tabs
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+                content.style.display = 'none';
+            });
+
+            // Remove active state from all buttons
+            tabButtons.forEach(btn => {
+                btn.classList.remove('tab-btn-active');
+            });
+
+            // Show selected tab
+            const selectedTab = document.getElementById(`tab-${targetTab}`);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+                selectedTab.style.display = 'grid';
+            }
+
+            // Add active state to clicked button
+            button.classList.add('tab-btn-active');
+        });
+    });
+}
 
 /**
  * WebSocket Connection
@@ -31,9 +70,9 @@ function initializeWebSocket() {
     socket = io();
 
     socket.on('connect', () => {
-        console.log('✓ Connected to server');
+        console.log('✓ Connected to WebSocket server');
         isConnected = true;
-        updateConnectionStatus(true, 'Connecting to ESP32...');
+        // Don't update status here - wait for connection_status event from server
     });
 
     socket.on('disconnect', () => {
@@ -44,8 +83,10 @@ function initializeWebSocket() {
     });
 
     socket.on('connection_status', (data) => {
-        console.log('Connection status:', data);
-        updateConnectionStatus(data.esp32, data.esp32 ? 'Connected' : 'ESP32 Offline');
+        console.log('✓ Received connection_status event:', data);
+        const statusMsg = data.esp32 ? 'Connected' : 'ESP32 Offline';
+        console.log(`  → Updating status to: ${statusMsg} (esp32=${data.esp32})`);
+        updateConnectionStatus(data.esp32, statusMsg);
     });
 
     socket.on('odom_update', (data) => {
@@ -93,6 +134,20 @@ function initializeWebSocket() {
     socket.on('status', (data) => {
         console.log('Status:', data.message);
         updateRobotParamsStatus(data.message);
+    });
+
+    socket.on('command_ack', (data) => {
+        console.log('✓ ACK:', data);
+        const msg = data.success ?
+            `✓ ${data.message_type} command successful` :
+            `✗ ${data.message_type} failed (error ${data.error_code})`;
+        showConfigStatus(msg, data.success ? 'success' : 'error');
+    });
+
+    socket.on('command_nack', (data) => {
+        console.error('✗ NACK:', data);
+        const msg = `✗ ${data.message_type} failed: ${data.error_description}`;
+        showConfigStatus(msg, 'error');
     });
 }
 
@@ -148,11 +203,13 @@ function initializeControls() {
     const btnReadConfig = document.getElementById('btn-read-config');
     const btnApplyPid = document.getElementById('btn-apply-pid');
     const btnApplyDeadband = document.getElementById('btn-apply-deadband');
+    const btnApplyHeadingHold = document.getElementById('btn-apply-heading-hold');
     const btnSaveConfig = document.getElementById('btn-save-config');
 
     btnReadConfig.addEventListener('click', requestRobotStatus);
     btnApplyPid.addEventListener('click', applyPidSettings);
     btnApplyDeadband.addEventListener('click', applyDeadbandSettings);
+    btnApplyHeadingHold.addEventListener('click', applyHeadingHoldKp);
     btnSaveConfig.addEventListener('click', saveConfigToEEPROM);
 
     // Reset pose button
@@ -274,37 +331,45 @@ function sendMotorCommand(direction) {
         return;
     }
 
-    let vel_left = 0;
-    let vel_right = 0;
+    // For forward/backward: use cmd_vel with w=0 (enables heading hold)
+    // For left/right: use direct wheel velocities (legacy mode)
 
-    // Calculate wheel velocities based on direction
-    switch(direction) {
-        case 'forward':
-            vel_left = currentVelocity;
-            vel_right = currentVelocity;
-            break;
-        case 'backward':
-            vel_left = -currentVelocity;
-            vel_right = -currentVelocity;
-            break;
-        case 'left':
-            vel_left = -currentVelocity * 0.5;
-            vel_right = currentVelocity * 0.5;
-            break;
-        case 'right':
-            vel_left = currentVelocity * 0.5;
-            vel_right = -currentVelocity * 0.5;
-            break;
+    if (direction === 'forward' || direction === 'backward') {
+        // Use cmd_vel mode: v (linear velocity), w=0 (heading hold)
+        const v = (direction === 'forward') ? currentVelocity : -currentVelocity;
+
+        socket.emit('motor_command', {
+            type: 'cmd_vel',
+            v: v,
+            w: 0.0  // w=0 activates heading hold with angular velocity feedback
+        });
+
+        console.log(`Motor command (cmd_vel): v=${v.toFixed(2)} m/s, w=0 rad/s (heading hold)`);
+
+    } else {
+        // For turning: use direct wheel velocities (legacy mode)
+        let vel_left = 0;
+        let vel_right = 0;
+
+        switch(direction) {
+            case 'left':
+                vel_left = -currentVelocity * 0.5;
+                vel_right = currentVelocity * 0.5;
+                break;
+            case 'right':
+                vel_left = currentVelocity * 0.5;
+                vel_right = -currentVelocity * 0.5;
+                break;
+        }
+
+        socket.emit('motor_command', {
+            type: 'velocity',
+            vel_left: vel_left,
+            vel_right: vel_right
+        });
+
+        console.log(`Motor command (wheel vel): L=${vel_left.toFixed(2)} R=${vel_right.toFixed(2)} m/s`);
     }
-
-    // Send command via WebSocket
-    socket.emit('motor_command', {
-        type: 'velocity',
-        vel_left: vel_left,
-        vel_right: vel_right
-    });
-
-    console.log(`Motor command: L=${vel_left.toFixed(2)} R=${vel_right.toFixed(2)} m/s`);
 }
 
 function stopMotor() {
@@ -448,11 +513,23 @@ function requestRobotStatus() {
 }
 
 function updateConfigDisplay(data) {
-    // Update PID values
-    if (data.pid) {
-        document.getElementById('pid-kp').value = data.pid.kp.toFixed(2);
-        document.getElementById('pid-ki').value = data.pid.ki.toFixed(2);
-        document.getElementById('pid-kd').value = data.pid.kd.toFixed(2);
+    // Update per-motor PID values (new UI)
+    if (data.pid_left && data.pid_right) {
+        // Per-motor PID values
+        document.getElementById('pid-left-kp').value = data.pid_left.kp.toFixed(2);
+        document.getElementById('pid-left-ki').value = data.pid_left.ki.toFixed(2);
+        document.getElementById('pid-left-kd').value = data.pid_left.kd.toFixed(2);
+        document.getElementById('pid-right-kp').value = data.pid_right.kp.toFixed(2);
+        document.getElementById('pid-right-ki').value = data.pid_right.ki.toFixed(2);
+        document.getElementById('pid-right-kd').value = data.pid_right.kd.toFixed(2);
+    } else if (data.pid) {
+        // Legacy: same PID for both motors
+        document.getElementById('pid-left-kp').value = data.pid.kp.toFixed(2);
+        document.getElementById('pid-left-ki').value = data.pid.ki.toFixed(2);
+        document.getElementById('pid-left-kd').value = data.pid.kd.toFixed(2);
+        document.getElementById('pid-right-kp').value = data.pid.kp.toFixed(2);
+        document.getElementById('pid-right-ki').value = data.pid.ki.toFixed(2);
+        document.getElementById('pid-right-kd').value = data.pid.kd.toFixed(2);
     }
 
     // Update deadband values
@@ -461,6 +538,11 @@ function updateConfigDisplay(data) {
         document.getElementById('db-left-rev').value = data.deadband.left_reverse.toFixed(1);
         document.getElementById('db-right-fwd').value = data.deadband.right_forward.toFixed(1);
         document.getElementById('db-right-rev').value = data.deadband.right_reverse.toFixed(1);
+    }
+
+    // Update heading hold Kp
+    if (data.heading_hold_kp !== undefined) {
+        document.getElementById('heading-hold-kp').value = data.heading_hold_kp.toFixed(1);
     }
 
     console.log('Updated config display:', data);
@@ -504,6 +586,19 @@ function applyDeadbandSettings() {
         right_reverse: rightRev
     });
     showConfigStatus('Applying deadband settings...', '');
+}
+
+function applyHeadingHoldKp() {
+    if (!socket || !isConnected) {
+        showConfigStatus('Not connected to server', 'error');
+        return;
+    }
+
+    const kp = parseFloat(document.getElementById('heading-hold-kp').value);
+
+    console.log(`Applying Heading Hold Kp: ${kp}`);
+    socket.emit('set_heading_hold_kp', { kp: kp });
+    showConfigStatus('Applying heading hold Kp...', '');
 }
 
 function saveConfigToEEPROM() {

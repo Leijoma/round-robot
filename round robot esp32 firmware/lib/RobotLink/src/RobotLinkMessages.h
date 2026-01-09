@@ -40,6 +40,18 @@ struct SetDeadbandPayload {
   float rightReverse;  // PWM offset
 } __attribute__((packed));
 
+// MSG_SET_HEADING_HOLD_KP (0x1D): Set angular velocity feedback gain
+struct SetHeadingHoldKpPayload {
+  float Kp;  // Angular velocity feedback gain
+} __attribute__((packed));
+
+// MSG_SET_ROBOT_PARAMS (0x24): Set robot geometry parameters
+struct SetRobotParamsPayload {
+  float wheelDiameter;  // meters
+  float wheelbase;      // meters
+  float ticksPerRev;    // encoder ticks per wheel revolution
+} __attribute__((packed));
+
 // MSG_SET_CONFIG (0x13) & MSG_CONFIG_RESP (0x16): Robot configuration
 struct ConfigPayload {
   float wheelDiameter;   // meters
@@ -84,6 +96,52 @@ struct EnableStreamPayload {
 // MSG_PING (0x7E) / MSG_PONG (0x7F): Connection test
 struct PingPongPayload {
   uint32_t timestamp;      // echo back for latency measurement
+} __attribute__((packed));
+
+// MSG_ACK (0x1F): Acknowledgment of received command
+struct AckPayload {
+  uint8_t originalMsgType;  // The message type being acknowledged
+  uint8_t status;           // 0=success, non-zero=error code
+  uint8_t reserved[2];      // Padding for future use
+} __attribute__((packed));
+
+// MSG_NACK (0x7D): Negative acknowledgment (error)
+struct NackPayload {
+  uint8_t originalMsgType;  // The message type that failed
+  uint8_t errorCode;        // Error code (see error codes below)
+  uint8_t reserved[2];      // Padding for future use
+} __attribute__((packed));
+
+// Error codes for NACK
+enum ErrorCode : uint8_t {
+  ERR_INVALID_PAYLOAD = 0x01,    // Payload size or format invalid
+  ERR_OUT_OF_RANGE = 0x02,       // Parameter out of valid range
+  ERR_EEPROM_WRITE_FAILED = 0x03, // EEPROM write operation failed
+  ERR_EEPROM_READ_FAILED = 0x04,  // EEPROM read operation failed
+  ERR_NOT_IMPLEMENTED = 0x05,     // Command not yet implemented
+  ERR_TIMEOUT = 0x06,             // Operation timed out
+  ERR_UNKNOWN = 0xFF              // Unknown error
+};
+
+// MSG_STATUS_EXTENDED (0x1E): Extended status with per-motor PID
+struct StatusExtendedPayload {
+  // Left motor PID (12 bytes)
+  float leftKp, leftKi, leftKd;
+  // Right motor PID (12 bytes)
+  float rightKp, rightKi, rightKd;
+  // Deadband values (16 bytes)
+  float deadband[4];  // L_fwd, L_rev, R_fwd, R_rev
+  // Heading hold gain (4 bytes)
+  float headingHoldKp;
+  // Flags (2 bytes)
+  uint8_t pidEnabled;
+  uint8_t streamEnabled;
+  // Stream interval (2 bytes)
+  uint16_t streamInterval;
+  // Statistics (12 bytes)
+  uint32_t framesReceived;
+  uint32_t framesSent;
+  uint32_t uptime;
 } __attribute__((packed));
 
 // ============================================================

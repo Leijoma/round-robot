@@ -45,6 +45,20 @@ void setupWiFi() {
   Serial.println("WiFi Setup");
   Serial.println("========================================");
 
+  // Configure static IP
+  IPAddress local_IP(192, 168, 68, 73);
+  IPAddress gateway(192, 168, 68, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  IPAddress primaryDNS(8, 8, 8, 8);      // Google DNS (optional)
+  IPAddress secondaryDNS(8, 8, 4, 4);    // Google DNS (optional)
+
+  // Configure static IP before connecting
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    Serial.println("  Static IP configuration failed!");
+  } else {
+    Serial.println("  Static IP configured: 192.168.68.73");
+  }
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -62,6 +76,8 @@ void setupWiFi() {
     Serial.println(" Connected!");
     Serial.print("  IP Address: ");
     Serial.println(WiFi.localIP());
+    Serial.print("  Gateway: ");
+    Serial.println(WiFi.gatewayIP());
     Serial.print("  UDP Port: ");
     Serial.println(UDP_PORT);
   } else {

@@ -62,3 +62,32 @@ build/
 # Claude project files (may contain tokens/keys)
 .claude/
 .claudeproject
+
+# Temporary test/diagnostic scripts (root level only)
+/test_*.py
+/run_*.py
+/query_*.py
+/read_*.py
+/tune_*.py
+/motor_tuner.py
+/wheelbase_calibration.py
+/rotation_encoder_test.py
+/complete_odometry_calibration.py
+/odometry_diagnostic.py
+/update_main_firmware.py
+
+# Trello helper scripts (contain API keys)
+/*trello*.py
+/add_motor_sync_stories.py
+
+# Temporary documentation and notes
+/quick_*.md
+/*_STATUS.md
+/*_USAGE.md
+/*_GUIDE.md
+/*_BACKLOG.md
+
+# Tuning data and story JSON files
+/motor_tuning_*.json
+/story_*.json
+/ui_*_story_*.json

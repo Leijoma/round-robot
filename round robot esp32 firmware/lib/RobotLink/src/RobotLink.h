@@ -38,6 +38,10 @@ enum MsgType : uint8_t {
   MSG_STOP         = 0x1A,  // Emergency stop
   MSG_RESET_POSE   = 0x1B,  // Reset pose to (0, 0, 0) without zeroing encoders
   MSG_SET_PID_PER_MOTOR = 0x1C, // Set PID parameters per motor (left/right separate)
+  MSG_SET_HEADING_HOLD_KP = 0x1D, // Set angular velocity feedback gain
+  MSG_STATUS_EXTENDED = 0x1E, // Extended status with per-motor PID and heading hold Kp
+  MSG_ACK     = 0x1F, // Acknowledgment of received command
+  MSG_SET_ROBOT_PARAMS = 0x24, // Set robot geometry parameters (wheel diameter, wheelbase, ticks/rev)
 
   // Lidar message types (ESP32 -> Host)
   MSG_LIDAR_SCAN   = 0x20,  // Complete 360° scan data
@@ -46,7 +50,8 @@ enum MsgType : uint8_t {
   MSG_LIDAR_SET_RPM = 0x23, // Set target RPM (Host -> ESP32)
 
   MSG_PING    = 0x7E, // optional
-  MSG_PONG    = 0x7F  // optional
+  MSG_PONG    = 0x7F, // optional
+  MSG_NACK    = 0x7D  // Negative acknowledgment (error)
 };
 
 // Callback signature

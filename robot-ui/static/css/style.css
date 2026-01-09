@@ -18,23 +18,57 @@ body {
 /* Status Bar */
 .status-bar {
     background-color: #2d2d2d;
-    padding: 1rem 2rem;
+    padding: 0.5rem 1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 2px solid #444;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid #444;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
 }
 
 .status-bar h1 {
-    font-size: 1.5rem;
+    font-size: 0.85rem;
     color: #4fc3f7;
+}
+
+.tab-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.tab-btn {
+    padding: 0.4rem 1rem;
+    background: #383838;
+    border: none;
+    border-radius: 4px;
+    color: #b0b0b0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    background: #444;
+}
+
+.tab-btn-active {
+    background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
+    color: white;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: grid;
 }
 
 .status-info {
     display: flex;
-    gap: 2rem;
-    font-size: 0.9rem;
+    gap: 1rem;
+    font-size: 0.7rem;
 }
 
 .status-online {
@@ -49,98 +83,101 @@ body {
 .dashboard {
     flex: 1;
     display: grid;
-    grid-template-columns: 350px 350px 1fr 1fr;
-    gap: 1.5rem;
-    padding: 1.5rem;
+    grid-template-columns: 240px 240px 420px 1fr;
+    grid-template-rows: 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem;
     overflow: hidden;
 }
 
 /* Panels */
 .panel {
     background-color: #2d2d2d;
-    border-radius: 8px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    padding: 0.75rem;
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .panel h2 {
-    font-size: 1.3rem;
-    margin-bottom: 1.5rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.75rem;
     color: #4fc3f7;
-    border-bottom: 2px solid #444;
-    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #444;
+    padding-bottom: 0.25rem;
 }
 
 /* Motor Control Panel */
 .control-panel {
-    max-width: 350px;
+    grid-column: 1;
+    grid-row: 1;
 }
 
 .direction-controls {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 2rem;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
 }
 
 .btn-row {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.25rem;
     align-items: center;
 }
 
 .btn-direction {
-    width: 100px;
-    height: 70px;
+    width: 55px;
+    height: 40px;
     background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
     border: none;
-    border-radius: 8px;
+    border-radius: 4px;
     color: white;
-    font-size: 1.2rem;
+    font-size: 0.7rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
 }
 
 .btn-direction:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(79, 195, 247, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 6px rgba(79, 195, 247, 0.4);
 }
 
 .btn-direction:active {
     transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
 }
 
 .btn-direction span {
-    font-size: 0.7rem;
+    font-size: 0.45rem;
     display: block;
-    margin-top: 0.2rem;
+    margin-top: 0.1rem;
 }
 
 .btn-stop {
-    width: 100px;
-    height: 70px;
+    width: 55px;
+    height: 40px;
     background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
     border: none;
-    border-radius: 8px;
+    border-radius: 4px;
     color: white;
-    font-size: 1.1rem;
+    font-size: 0.65rem;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
 }
 
 .btn-stop:hover {
     transform: scale(1.05);
-    box-shadow: 0 6px 12px rgba(244, 67, 54, 0.4);
+    box-shadow: 0 3px 6px rgba(244, 67, 54, 0.4);
 }
 
 .btn-stop:active {
@@ -149,14 +186,14 @@ body {
 
 /* Control Group */
 .control-group {
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.5rem;
 }
 
 .control-group label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
     color: #b0b0b0;
-    font-size: 0.9rem;
+    font-size: 0.65rem;
 }
 
 .control-group input[type="range"] {
@@ -191,40 +228,41 @@ body {
 
 .value-display {
     display: inline-block;
-    margin-left: 1rem;
-    padding: 0.3rem 0.8rem;
+    margin-left: 0.5rem;
+    padding: 0.15rem 0.4rem;
     background-color: #444;
-    border-radius: 4px;
+    border-radius: 2px;
     font-weight: bold;
+    font-size: 0.65rem;
     color: #4fc3f7;
 }
 
 /* Odometry Display */
 .odometry-display {
-    margin-top: 2rem;
+    margin-top: 0.75rem;
 }
 
 .odom-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .odometry-display h3 {
-    font-size: 1.1rem;
+    font-size: 0.65rem;
     color: #b0b0b0;
     margin: 0;
 }
 
 .btn-stream {
-    padding: 0.4rem 0.8rem;
+    padding: 0.2rem 0.4rem;
     background-color: #4caf50;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.6rem;
     font-weight: bold;
     transition: all 0.3s ease;
 }
@@ -245,37 +283,39 @@ body {
 .odom-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0.8rem;
+    gap: 0.3rem;
 }
 
 .odom-item {
     display: flex;
     justify-content: space-between;
-    padding: 0.6rem;
+    padding: 0.25rem 0.4rem;
     background-color: #383838;
-    border-radius: 4px;
-    border-left: 3px solid #4fc3f7;
+    border-radius: 2px;
+    border-left: 2px solid #4fc3f7;
 }
 
 .odom-item .label {
     color: #b0b0b0;
-    font-size: 0.9rem;
+    font-size: 0.6rem;
 }
 
 .odom-item .value {
     color: #e0e0e0;
     font-weight: bold;
+    font-size: 0.6rem;
     font-family: 'Courier New', monospace;
 }
 
 /* Keyboard Hint */
 .keyboard-hint {
-    margin-top: 2rem;
-    padding: 1rem;
+    margin-top: 0.75rem;
+    padding: 0.4rem;
     background-color: #383838;
-    border-radius: 4px;
+    border-radius: 2px;
     text-align: center;
     color: #888;
+    font-size: 0.55rem;
 }
 
 /* Placeholder Panels */
@@ -341,46 +381,48 @@ body {
    =================================== */
 
 .lidar-panel {
-    grid-column: span 2;
+    grid-column: 3;
+    grid-row: 1;
 }
 
 .lidar-controls {
     display: flex;
-    gap: 1rem;
+    gap: 0.4rem;
     align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
+    margin-bottom: 0.4rem;
+    padding: 0.3rem;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 4px;
+    border-radius: 2px;
 }
 
 .lidar-controls .control-group.inline {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
 }
 
 .lidar-controls .control-group.inline label {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 0.6rem;
 }
 
 .lidar-controls input[type="number"] {
-    width: 70px;
-    padding: 0.375rem 0.5rem;
+    width: 45px;
+    padding: 0.15rem 0.25rem;
     background: #2a2a2a;
     border: 1px solid #444;
-    border-radius: 4px;
+    border-radius: 2px;
     color: #e0e0e0;
-    font-size: 0.875rem;
+    font-size: 0.6rem;
 }
 
 .btn-lidar {
-    padding: 0.5rem 1rem;
+    padding: 0.2rem 0.5rem;
     background: #444;
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: #e0e0e0;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -396,12 +438,12 @@ body {
 }
 
 .btn-secondary {
-    padding: 0.375rem 0.75rem;
+    padding: 0.2rem 0.4rem;
     background: #555;
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: #e0e0e0;
-    font-size: 0.875rem;
+    font-size: 0.6rem;
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -415,7 +457,7 @@ body {
 }
 
 .status-text {
-    font-size: 0.875rem;
+    font-size: 0.6rem;
     font-family: 'Courier New', monospace;
 }
 
@@ -431,14 +473,14 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 1rem;
+    padding: 0.5rem;
     background: #1a1a1a;
-    border-radius: 4px;
+    border-radius: 2px;
 }
 
 #lidar-canvas {
     border: 1px solid #333;
-    border-radius: 4px;
+    border-radius: 2px;
     background: #0a0a0a;
 }
 
@@ -446,20 +488,30 @@ body {
    Configuration Panel Styles
    =================================== */
 
+/* Settings Tab Grid Layout */
+#tab-settings.dashboard {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+}
+
 .config-panel {
-    grid-column: span 1;
+    grid-column: auto;
+}
+
+.robot-params-panel {
+    grid-column: auto;
 }
 
 .config-section {
-    margin-bottom: 1.5rem;
-    padding: 1rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 4px;
+    border-radius: 2px;
 }
 
 .config-section h3 {
-    font-size: 0.95rem;
-    margin-bottom: 0.75rem;
+    font-size: 0.65rem;
+    margin-bottom: 0.4rem;
     color: #4fc3f7;
     font-weight: 600;
 }
@@ -467,8 +519,8 @@ body {
 .config-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0.6rem;
-    margin-bottom: 0.75rem;
+    gap: 0.3rem;
+    margin-bottom: 0.4rem;
 }
 
 .config-item {
@@ -479,18 +531,18 @@ body {
 
 .config-item label {
     color: #b0b0b0;
-    font-size: 0.9rem;
-    min-width: 80px;
+    font-size: 0.6rem;
+    min-width: 60px;
 }
 
 .config-item input[type="number"] {
-    width: 100px;
-    padding: 0.4rem 0.6rem;
+    width: 70px;
+    padding: 0.2rem 0.3rem;
     background: #2a2a2a;
     border: 1px solid #444;
-    border-radius: 4px;
+    border-radius: 2px;
     color: #e0e0e0;
-    font-size: 0.9rem;
+    font-size: 0.6rem;
     font-family: 'Courier New', monospace;
 }
 
@@ -501,12 +553,12 @@ body {
 
 .btn-config {
     width: 100%;
-    padding: 0.5rem 1rem;
+    padding: 0.25rem 0.5rem;
     background: #555;
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: #e0e0e0;
-    font-size: 0.85rem;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
@@ -519,52 +571,52 @@ body {
 
 .config-actions {
     display: flex;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
+    gap: 0.3rem;
+    margin-bottom: 0.3rem;
 }
 
 .btn-primary {
     flex: 1;
-    padding: 0.6rem 1rem;
+    padding: 0.3rem 0.5rem;
     background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: white;
-    font-size: 0.9rem;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(79, 195, 247, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(79, 195, 247, 0.4);
 }
 
 .btn-save {
     flex: 1;
-    padding: 0.6rem 1rem;
+    padding: 0.3rem 0.5rem;
     background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: white;
-    font-size: 0.9rem;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-save:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(76, 175, 80, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.4);
 }
 
 .config-status {
-    padding: 0.5rem;
+    padding: 0.25rem;
     background: #383838;
-    border-radius: 4px;
+    border-radius: 2px;
     text-align: center;
-    font-size: 0.85rem;
+    font-size: 0.6rem;
     color: #888;
 }
 
@@ -581,24 +633,25 @@ body {
    =================================== */
 
 .pose-panel {
-    grid-column: span 1;
+    grid-column: 2;
+    grid-row: 1;
 }
 
 .pose-display {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 0.5rem;
 }
 
 .pose-section {
-    padding: 1rem;
+    padding: 0.4rem;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 4px;
+    border-radius: 2px;
 }
 
 .pose-section h3 {
-    font-size: 1rem;
-    margin-bottom: 0.75rem;
+    font-size: 0.65rem;
+    margin-bottom: 0.3rem;
     color: #b0b0b0;
     font-weight: 600;
 }
@@ -614,26 +667,26 @@ body {
 .pose-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0.6rem;
+    gap: 0.25rem;
 }
 
 .pose-item {
     display: flex;
     justify-content: space-between;
-    padding: 0.5rem;
+    padding: 0.2rem 0.3rem;
     background-color: #383838;
-    border-radius: 4px;
+    border-radius: 2px;
 }
 
 .pose-item .label {
     color: #b0b0b0;
-    font-size: 0.9rem;
+    font-size: 0.6rem;
 }
 
 .pose-item .value {
     font-weight: bold;
     font-family: 'Courier New', monospace;
-    font-size: 0.95rem;
+    font-size: 0.6rem;
 }
 
 .pose-label-dead-reckoning {
@@ -662,48 +715,48 @@ body {
 
 .btn-reset-pose {
     width: 100%;
-    margin-top: 1rem;
-    padding: 0.6rem 1rem;
+    margin-top: 0.4rem;
+    padding: 0.3rem 0.5rem;
     background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: white;
-    font-size: 0.9rem;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-reset-pose:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(244, 67, 54, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(244, 67, 54, 0.4);
 }
 
 .btn-zero-encoders {
     width: 100%;
-    margin-top: 0.5rem;
-    padding: 0.6rem 1rem;
+    margin-top: 0.25rem;
+    padding: 0.3rem 0.5rem;
     background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: white;
-    font-size: 0.95rem;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .btn-zero-encoders:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(255, 152, 0, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(255, 152, 0, 0.4);
 }
 
 .btn-toggle {
-    padding: 0.4rem 0.8rem;
+    padding: 0.2rem 0.4rem;
     border: none;
-    border-radius: 4px;
+    border-radius: 2px;
     color: white;
-    font-size: 0.85rem;
+    font-size: 0.6rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -732,17 +785,18 @@ body {
    =================================== */
 
 .map-panel {
-    grid-column: span 1;
+    grid-column: 4;
+    grid-row: 1;
 }
 
 .map-controls {
     display: flex;
-    gap: 1rem;
+    gap: 0.4rem;
     align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
+    margin-bottom: 0.4rem;
+    padding: 0.3rem;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 4px;
+    border-radius: 2px;
 }
 
 .map-controls .status-text {
@@ -753,15 +807,21 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 1rem;
+    padding: 0.5rem;
     background: #1a1a1a;
-    border-radius: 4px;
+    border-radius: 2px;
+    flex: 1;
+    min-height: 0;
 }
 
 #map-canvas {
     border: 1px solid #333;
-    border-radius: 4px;
+    border-radius: 2px;
     background: #0a0a0a;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
 }
 
 /* Responsive adjustments */
