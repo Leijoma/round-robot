@@ -16,11 +16,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from robotlink import RobotLink, MessageType, OdomPayload, LidarScanPayload, AckPayload, NackPayload, StatusExtendedPayload
 
-# SLAM imports (Phase 2, 3, & 4 Integration)
+# SLAM imports (Phase 2, 3, 4, & 5 Integration)
 from slam.data_sync import DataSynchronizer
 from slam.sensor_data import OdomReading, LidarScan, LidarReading
 from slam.motion_model import RobotParameters
 from slam.localization import IntegratedLocalizer
+from slam.occupancy_grid import OccupancyGrid
 
 # Configuration
 ESP32_HOST = '192.168.68.73'
@@ -37,9 +38,11 @@ robot_connected = False
 running = False
 esp32_thread = None
 
-# SLAM state (Phase 2, 3, & 4 Integration)
+# SLAM state (Phase 2, 3, 4, & 5 Integration)
 data_synchronizer = None
 localizer = None  # Integrated localizer (dead reckoning + ICP)
+occupancy_grid = None  # Occupancy grid mapper (Phase 5)
+last_map_broadcast_time = 0.0  # Throttle map updates to 2 Hz
 
 # Odometry state tracking
 odom_state = {
@@ -66,7 +69,7 @@ METERS_PER_TICK = (WHEEL_DIAMETER * 3.14159) / TICKS_PER_REV
 
 def init_robot_connection():
     """Initialize connection to ESP32"""
-    global robot, robot_connected, data_synchronizer, localizer
+    global robot, robot_connected, data_synchronizer, localizer, occupancy_grid
 
     print(f'\nConnecting to ESP32 at {ESP32_HOST}:{ESP32_PORT}...')
 
@@ -95,6 +98,10 @@ def init_robot_connection():
 
         localizer = IntegratedLocalizer(robot_params=robot_params)
         print('✓ Integrated localizer initialized (dead reckoning + ICP)')
+
+        # Initialize occupancy grid (Phase 5)
+        occupancy_grid = OccupancyGrid(width=100, height=100, resolution=0.05)
+        print('✓ Occupancy grid initialized (100×100 @ 5cm resolution, 5m×5m coverage)')
 
         robot_connected = True
 
@@ -287,6 +294,26 @@ def esp32_communication_thread():
                                       f'dθ={np.rad2deg(transform[2]):.1f}°, '
                                       f'err={match_info["error"]:.4f}m, '
                                       f'corresp={quality["correspondence_ratio"]:.1%}')
+
+                            # Update occupancy grid with scan (Phase 5)
+                            if occupancy_grid:
+                                # Use ICP-corrected pose for mapping (more accurate)
+                                occupancy_grid.update_from_scan(corrected_pose, lidar_scan_obj)
+
+                                # Broadcast map update (throttled to 2 Hz to reduce bandwidth)
+                                global last_map_broadcast_time
+                                current_time = time.time()
+                                if current_time - last_map_broadcast_time >= 0.5:  # 2 Hz
+                                    map_data = occupancy_grid.serialize_for_ui(corrected_pose)
+                                    socketio.emit('map_update', map_data)
+                                    last_map_broadcast_time = current_time
+
+                                    # Log mapping stats (every 10 map updates)
+                                    if esp32_communication_thread.lidar_scan_count % 50 == 0:
+                                        stats = occupancy_grid.get_stats()
+                                        print(f'  Map: {stats["occupied_cells"]} occupied, '
+                                              f'{stats["free_cells"]} free, '
+                                              f'{stats["scans_processed"]} scans')
 
                     # Broadcast to all connected WebSocket clients
                     socketio.emit('lidar_scan', {
@@ -924,6 +951,36 @@ def handle_save_robot_params():
         emit('status', {'message': 'Robot parameters saved successfully'})
     except Exception as e:
         print(f'Error saving robot parameters: {e}')
+        emit('error', {'message': str(e)})
+
+
+@socketio.on('clear_map')
+def handle_clear_map():
+    """Clear occupancy grid map"""
+    global occupancy_grid, last_map_broadcast_time
+
+    if occupancy_grid is None:
+        emit('error', {'message': 'Occupancy grid not initialized'})
+        return
+
+    try:
+        # Clear the map
+        occupancy_grid.clear()
+        print('Occupancy grid cleared')
+
+        # Get current pose from localizer
+        corrected_pose = None
+        if localizer:
+            corrected_pose = localizer.get_corrected_pose()
+
+        # Broadcast cleared map to all clients
+        map_data = occupancy_grid.serialize_for_ui(corrected_pose)
+        socketio.emit('map_update', map_data, broadcast=True)
+        last_map_broadcast_time = time.time()
+
+        emit('status', {'message': 'Map cleared successfully'})
+    except Exception as e:
+        print(f'Error clearing map: {e}')
         emit('error', {'message': str(e)})
 
 

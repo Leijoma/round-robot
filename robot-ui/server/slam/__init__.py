@@ -30,6 +30,7 @@ from .dead_reckoning import DeadReckoning, DeadReckoningState
 from .lidar_processing import LidarProcessor
 from .scan_matcher import ICPScanMatcher
 from .localization import IntegratedLocalizer
+from .occupancy_grid import OccupancyGrid
 
 __all__ = [
     'OdomReading',
@@ -45,4 +46,5 @@ __all__ = [
     'LidarProcessor',
     'ICPScanMatcher',
     'IntegratedLocalizer',
+    'OccupancyGrid',
 ]
