@@ -317,12 +317,13 @@ def esp32_communication_thread():
 
                                     # Add all three pose estimates for visualization
                                     host_dr_pose = localizer.get_dead_reckoning_pose()
-                                    arduino_pose = localizer.dead_reckoning.last_arduino_pose if localizer.dead_reckoning.last_arduino_pose else None
+                                    # Arduino pose is embedded in odometry messages, use host DR for now (TODO: extract Arduino pose separately)
+                                    arduino_pose = None
 
                                     map_data['poses'] = {
                                         'icp': {'x': corrected_pose.x, 'y': corrected_pose.y, 'theta': corrected_pose.theta} if corrected_pose else None,
                                         'host_dr': {'x': host_dr_pose.x, 'y': host_dr_pose.y, 'theta': host_dr_pose.theta} if host_dr_pose else None,
-                                        'arduino': {'x': arduino_pose.x, 'y': arduino_pose.y, 'theta': arduino_pose.theta} if arduino_pose else None
+                                        'arduino': arduino_pose
                                     }
 
                                     socketio.emit('map_update', map_data)
