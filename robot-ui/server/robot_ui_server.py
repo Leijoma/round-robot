@@ -1004,7 +1004,7 @@ def handle_set_map_origin(data):
 
         # Broadcast new map to all clients
         map_data = occupancy_grid.serialize_for_ui(corrected_pose)
-        socketio.emit('map_update', map_data, broadcast=True)
+        emit('map_update', map_data, broadcast=True)
         last_map_broadcast_time = time.time()
 
         emit('status', {'message': f'Map origin set to ({origin_offset_x}, {origin_offset_y})'})
@@ -1034,7 +1034,7 @@ def handle_clear_map():
 
         # Broadcast cleared map to all clients
         map_data = occupancy_grid.serialize_for_ui(corrected_pose)
-        socketio.emit('map_update', map_data, broadcast=True)
+        emit('map_update', map_data, broadcast=True)
         last_map_broadcast_time = time.time()
 
         emit('status', {'message': 'Map cleared successfully'})
