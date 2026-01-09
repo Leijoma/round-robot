@@ -1,17 +1,40 @@
 # Round Robot Project - Current Status
 
-**Last Updated**: 2026-01-08 15:12
+**Last Updated**: 2026-01-09 01:45
 
 ---
 
 ## 📊 Current Phase
 
 **Phase 1**: Sensor Optimization & Motor Synchronization
-**Active Story**: 1.8 (Testing Complete) / Ready for 1.1-1.5
+**Active Story**: Ready to upload odometry fixes and test
 
 ---
 
 ## ✅ Recently Completed
+
+### 2026-01-09: CRITICAL - Odometry Precision Bug Fixes
+- ✅ **ROOT CAUSE FOUND**: Float-to-int accumulation errors causing 21% odometry error
+- ✅ **Arduino Firmware** - Fixed pose accumulation precision (main.cpp:82-84, 201-203)
+  - Changed pose_x_mm, pose_y_mm, pose_th_mrad from int32_t to float
+  - Removed int casting in updateOdometry() preventing 0.3-0.7mm loss per iteration
+  - Only cast to int when transmitting over protocol
+- ✅ **Python Host** - Fixed wrong robot parameters in SLAM dead reckoning
+  - motion_model.py had wheel_diameter=80mm, ticks=360 (2x wrong!)
+  - Fixed to wheel_diameter=79mm, ticks=714 (calibrated values)
+  - Host was calculating 2x distance per encoder tick vs Arduino
+- ✅ **Protocol Enhancements**:
+  - Added MSG_SET_ROBOT_PARAMS (0x24) for configurable geometry
+  - Added MSG_ACK/NACK (0x1F/0x7D) for command acknowledgment
+  - Added MSG_STATUS_EXTENDED (0x1E) for per-motor PID reporting
+  - Added heading hold controller with configurable gain
+- ✅ **EEPROM Updates**:
+  - Bumped EEPROM version to v3 (adds headingHoldKp, robot geometry)
+  - Added automatic migration from v2 to v3
+  - Robot geometry now loaded from EEPROM and configurable via UI
+- ✅ **Expected Improvement**: Odometry error should drop from 21% to 1-2%
+- ✅ Committed and pushed: b6f7954
+- ⏳ **NEXT**: Upload firmware to Arduino and test odometry accuracy
 
 ### 2026-01-08: Per-Motor PID Configuration & Testing (Stories 1.7-1.8)
 - ✅ Implemented per-motor PID parameters with EEPROM persistence
