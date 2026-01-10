@@ -108,7 +108,8 @@ const float MIN_VELOCITY_THRESHOLD = 0.08f;  // m/s
 // At 0.3 m/s, decel of 1.0 m/s² → 0.3 seconds to stop (gentle)
 // At 0.3 m/s, decel of 2.0 m/s² → 0.15 seconds to stop (moderate)
 // At 0.3 m/s, decel of 4.0 m/s² → 0.075 seconds to stop (aggressive)
-const float MAX_DECELERATION = 2.0f;  // m/s² - moderate deceleration for balance
+// At 0.3 m/s, decel of 10.0 m/s² → 0.03 seconds (fast, for testing)
+const float MAX_DECELERATION = 10.0f;  // m/s² - TESTING: fast ramping to debug issue
 
 // SoftwareSerial for ESP32 communication
 SoftwareSerial softSerial(PIN_SOFT_RX, PIN_SOFT_TX);
@@ -240,8 +241,17 @@ float rampVelocity(float current, float target, float dt) {
     delta = -maxDelta;
   }
 
-  // Return ramped velocity
-  return current + delta;
+  // Calculate new ramped velocity
+  float newVel = current + delta;
+
+  // CRITICAL: Snap to zero when very close to avoid deadband zone
+  // Motors can't respond to low PWM values (< deadband ~55), so ramping
+  // through zero causes coasting. Skip the deadband region entirely.
+  if (abs(newVel) < MIN_VELOCITY_THRESHOLD && abs(target) < 0.01f) {
+    return 0.0f;  // Snap to zero for clean stops
+  }
+
+  return newVel;
 }
 
 // ============================================================
