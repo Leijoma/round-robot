@@ -73,6 +73,8 @@ class OdomPayload:
     x_mm: int              # X position in mm
     y_mm: int              # Y position in mm
     theta_mrad: int        # Heading in milliradians
+    error_left: int = 0    # encoder error count (invalid transitions)
+    error_right: int = 0   # encoder error count (invalid transitions)
 
     # Computed values (not in payload)
     encoder_left: int = 0      # total ticks (computed)
@@ -84,9 +86,23 @@ class OdomPayload:
 
     @classmethod
     def unpack(cls, data: bytes) -> 'OdomPayload':
-        """Unpack Arduino odometry format: <Iiiiih> (22 bytes)"""
-        if len(data) == 22:
-            # Arduino format (updated): timestamp, delta_L, delta_R, x, y, theta
+        """Unpack Arduino odometry format"""
+        if len(data) == 26:
+            # Arduino format (latest): timestamp, delta_L, delta_R, x, y, theta, err_L, err_R
+            # Format: <IiiiihHH> (26 bytes)
+            values = struct.unpack('<IiiiihHH', data)
+            return cls(
+                timestamp=values[0],
+                delta_left=values[1],
+                delta_right=values[2],
+                x_mm=values[3],
+                y_mm=values[4],
+                theta_mrad=values[5],
+                error_left=values[6],
+                error_right=values[7]
+            )
+        elif len(data) == 22:
+            # Arduino format (previous): timestamp, delta_L, delta_R, x, y, theta
             # All positions are SIGNED int32 to handle negative coordinates
             values = struct.unpack('<Iiiiih', data)
             return cls(
@@ -127,7 +143,7 @@ class OdomPayload:
                 pwm_right=values[5]
             )
         else:
-            raise ValueError(f"Invalid odometry payload size: {len(data)} bytes (expected 18, 22, or 24)")
+            raise ValueError(f"Invalid odometry payload size: {len(data)} bytes (expected 18, 22, 24, or 26)")
 
 
 @dataclass
