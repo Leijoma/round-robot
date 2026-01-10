@@ -541,6 +541,9 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
         }
         Serial.println();
       }
+
+      // Send ACK to confirm command received
+      sendAck(type);
       break;
     }
 
@@ -563,6 +566,8 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
         Serial.println(F("  --> STOP command"));
       }
 
+      // Send ACK to confirm command received
+      sendAck(type);
       break;
     }
 
