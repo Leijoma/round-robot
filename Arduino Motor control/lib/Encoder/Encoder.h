@@ -1,7 +1,8 @@
 /**
  * Encoder.h - 2X Quadrature Encoder Library
  *
- * Provides 2X decoding using XOR logic on CHANGE interrupts.
+ * Provides 2X decoding using state machine lookup table on CHANGE interrupts.
+ * More robust than XOR method - validates state transitions and tracks errors.
  * Tested and verified with 714 ticks/rev.
  */
 
@@ -42,6 +43,12 @@ public:
     void setCount(int32_t count);
 
     /**
+     * Get count of invalid state transitions (for diagnostics)
+     * High error count indicates encoder signal quality issues
+     */
+    uint32_t getErrorCount();
+
+    /**
      * ISR handler - call this from your interrupt service routine
      */
     void handleInterrupt();
@@ -51,6 +58,8 @@ private:
     uint8_t _pinB;
     bool _reverse;
     volatile int32_t _count;
+    volatile uint8_t _lastState;      // Previous encoder state (2 bits: A<<1 | B)
+    volatile uint32_t _errorCount;    // Count of invalid state transitions
 };
 
 #endif
