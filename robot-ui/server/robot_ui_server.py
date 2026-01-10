@@ -655,8 +655,8 @@ def handle_request_status():
         return
 
     try:
-        robot.request_status()
-        print('Requested robot status')
+        robot.request_status_extended()
+        print('Requested extended robot status (includes heading_hold_kp)')
 
     except Exception as e:
         print(f'Error requesting status: {e}')

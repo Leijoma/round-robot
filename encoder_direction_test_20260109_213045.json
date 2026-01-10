@@ -1,0 +1,20 @@
+{
+  "timestamp": "20260109_213045",
+  "results": {
+    "forward": {
+      "left_ticks": 1531,
+      "right_ticks": 1629,
+      "duration": 3.005023956298828
+    },
+    "reverse": {
+      "left_ticks": 1559,
+      "right_ticks": 1579,
+      "duration": 3.0050039291381836
+    }
+  },
+  "analysis": {
+    "left_diff_pct": -1.8288700195950358,
+    "right_diff_pct": 3.0693677102516883,
+    "avg_diff_pct": 2.449118864923362
+  }
+}
