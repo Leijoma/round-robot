@@ -1,89 +1,109 @@
-/**
- * Encoder.cpp - 2X Quadrature Encoder Implementation
- *
- * Uses state machine lookup table for robust quadrature decoding.
- * More tolerant of slow rise times and noise than simple XOR method.
- */
-
 #include "Encoder.h"
 
+// Transition table for quadrature decoding.
+// Index = (prev<<2) | curr, where prev/curr are 2-bit AB states.
+// Values: +1, -1 for valid steps, 0 for invalid/no movement.
+const int8_t Encoder::_transitionTable[16] = {
+  // prev=00: curr 00,01,10,11
+   0,  +1,  -1,   0,
+  // prev=01
+  -1,   0,   0,  +1,
+  // prev=10
+  +1,   0,   0,  -1,
+  // prev=11
+   0,  -1,  +1,   0
+};
+
 Encoder::Encoder(uint8_t pinA, uint8_t pinB, bool reverse)
-    : _pinA(pinA), _pinB(pinB), _reverse(reverse), _count(0), _lastState(0), _errorCount(0) {
+: _pinA(pinA),
+  _pinB(pinB),
+  _reverse(reverse),
+  _count(0),
+  _lastAB(0),
+  _errorCount(0),
+  _lastInterruptUs(0),
+  _minPulseUs(0) // disabled by default
+{
 }
 
-void Encoder::begin() {
+void Encoder::begin(bool useInternalPullups) {
+  if (useInternalPullups) {
     pinMode(_pinA, INPUT_PULLUP);
     pinMode(_pinB, INPUT_PULLUP);
-    _count = 0;
-    _errorCount = 0;
+  } else {
+    pinMode(_pinA, INPUT);
+    pinMode(_pinB, INPUT);
+  }
 
-    // Initialize state by reading current encoder position
-    uint8_t a = digitalRead(_pinA);
-    uint8_t b = digitalRead(_pinB);
-    _lastState = (a << 1) | b;
+  _count = 0;
+  _errorCount = 0;
+  _lastInterruptUs = micros();
+
+  // Initialize last state
+  uint8_t a = (uint8_t)digitalRead(_pinA);
+  uint8_t b = (uint8_t)digitalRead(_pinB);
+  _lastAB = (a << 1) | b;
 }
 
-int32_t Encoder::getCount() {
-    noInterrupts();
-    int32_t count = _count;
-    interrupts();
-    return count;
+int32_t Encoder::getCount() const {
+  noInterrupts();
+  int32_t c = _count;
+  interrupts();
+  return c;
 }
 
 void Encoder::reset() {
-    noInterrupts();
-    _count = 0;
-    interrupts();
+  noInterrupts();
+  _count = 0;
+  interrupts();
 }
 
 void Encoder::setCount(int32_t count) {
-    noInterrupts();
-    _count = count;
-    interrupts();
+  noInterrupts();
+  _count = count;
+  interrupts();
 }
 
-uint32_t Encoder::getErrorCount() {
-    noInterrupts();
-    uint32_t errors = _errorCount;
-    interrupts();
-    return errors;
+uint32_t Encoder::getErrorCount() const {
+  noInterrupts();
+  uint32_t e = _errorCount;
+  interrupts();
+  return e;
+}
+
+void Encoder::setMinPulseUs(uint16_t us) {
+  noInterrupts();
+  _minPulseUs = us;
+  interrupts();
 }
 
 void Encoder::handleInterrupt() {
-    // State machine 2X quadrature decoder
-    // Read current encoder state
-    uint8_t a = digitalRead(_pinA);
-    uint8_t b = digitalRead(_pinB);
-    uint8_t currentState = (a << 1) | b;  // 2-bit state: 00, 01, 10, 11
-
-    // State transition lookup table for 2X quadrature decoding
-    // Maps (prevState << 2 | currentState) to count delta
-    // Valid Gray code transitions: +1 (forward) or -1 (backward)
-    // Invalid transitions (both bits flip): 0
-    static const int8_t transitionTable[16] = {
-         0, +1, -1,  0,   // From state 00 (A=0, B=0)
-        -1,  0,  0, +1,   // From state 01 (A=0, B=1)
-        +1,  0,  0, -1,   // From state 10 (A=1, B=0)
-         0, -1, +1,  0    // From state 11 (A=1, B=1)
-    };
-
-    // Look up count delta based on state transition
-    int8_t delta = transitionTable[(_lastState << 2) | currentState];
-
-    // Detect invalid transitions for diagnostics
-    if (delta == 0 && _lastState != currentState) {
-        // Invalid transition: both channels changed simultaneously
-        // This indicates signal quality issues or missed interrupts
-        _errorCount++;
+  // Glitch reject (microseconds). Helps with EMI without dropping real ticks.
+  if (_minPulseUs) {
+    uint32_t now = micros();
+    uint32_t dt = now - _lastInterruptUs;
+    if (dt < _minPulseUs) {
+      return;
     }
+    _lastInterruptUs = now;
+  }
 
-    // Apply direction reversal if configured
-    if (_reverse) {
-        _count -= delta;
-    } else {
-        _count += delta;
-    }
+  // Read both channels
+  uint8_t a = (uint8_t)digitalRead(_pinA);
+  uint8_t b = (uint8_t)digitalRead(_pinB);
+  uint8_t curr = (a << 1) | b;
 
-    // Save current state for next interrupt
-    _lastState = currentState;
+  uint8_t prev = _lastAB;
+  uint8_t idx = (prev << 2) | curr;
+  int8_t delta = _transitionTable[idx];
+
+  if (delta == 0 && curr != prev) {
+    // Invalid transition (often noise/edge skew)
+    _errorCount++;
+  }
+
+  _lastAB = curr;
+
+  if (_reverse) delta = -delta;
+  _count += delta;
 }
