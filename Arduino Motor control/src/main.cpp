@@ -806,11 +806,14 @@ void handleFrame(uint8_t type, const uint8_t* payload, uint8_t len) {
 }
 
 void sendOdometry() {
-  // Get current encoder counts atomically
+  // Get current encoder counts and error counts atomically
   noInterrupts();
   int32_t encL = encoderLeft.getCount();
   int32_t encR = encoderRight.getCount();
   interrupts();
+
+  uint32_t errL = encoderLeft.getErrorCount();
+  uint32_t errR = encoderRight.getErrorCount();
 
   // Calculate delta ticks since last send
   static int32_t lastSentL = 0;
@@ -822,8 +825,8 @@ void sendOdometry() {
   lastSentL = encL;
   lastSentR = encR;
 
-  // Build ODOM message (updated protocol format with int32 deltas)
-  uint8_t payload[22];  // Increased from 18 to 22 bytes
+  // Build ODOM message (updated protocol format with encoder errors)
+  uint8_t payload[26];  // Increased from 22 to 26 bytes (added 2x uint16_t)
   uint32_t t_ms = millis();
 
   // Convert float pose to int for transmission (but keep accumulating as float internally)
@@ -837,8 +840,10 @@ void sendOdometry() {
   RobotLink::Link::wr_i32_le(&payload[12], pose_x_mm_int); // 4 bytes: x_mm
   RobotLink::Link::wr_i32_le(&payload[16], pose_y_mm_int); // 4 bytes: y_mm
   RobotLink::Link::wr_i16_le(&payload[20], pose_th_mrad_int); // 2 bytes: theta_mrad
+  RobotLink::Link::wr_u16_le(&payload[22], (uint16_t)(errL & 0xFFFF)); // 2 bytes: error_left
+  RobotLink::Link::wr_u16_le(&payload[24], (uint16_t)(errR & 0xFFFF)); // 2 bytes: error_right
 
-  robotLink->sendFrame(RobotLink::MSG_ODOM, payload, 22);  // Updated size
+  robotLink->sendFrame(RobotLink::MSG_ODOM, payload, 26);  // Updated size to 26 bytes
 }
 
 // ============================================================
@@ -868,10 +873,12 @@ void setup() {
   pinMode(PIN_M2_PWM, OUTPUT);
 
   // Initialize encoder pins
-  pinMode(PIN_ENC_L_A, INPUT_PULLUP);
-  pinMode(PIN_ENC_L_B, INPUT_PULLUP);
-  pinMode(PIN_ENC_R_A, INPUT_PULLUP);
-  pinMode(PIN_ENC_R_B, INPUT_PULLUP);
+  // NOTE: Using external 4.7kΩ pull-up resistors (not internal pull-ups)
+  // Internal pull-ups are too weak (~30kΩ) and cause 25% directional asymmetry
+  pinMode(PIN_ENC_L_A, INPUT);
+  pinMode(PIN_ENC_L_B, INPUT);
+  pinMode(PIN_ENC_R_A, INPUT);
+  pinMode(PIN_ENC_R_B, INPUT);
 
   // Attach interrupts for 2X quadrature decoding with XOR logic
   // CHANGE mode triggers on both RISING and FALLING edges of channel A
