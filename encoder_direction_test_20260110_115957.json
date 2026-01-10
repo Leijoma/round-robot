@@ -1,0 +1,24 @@
+{
+  "timestamp": "20260110_115957",
+  "results": {
+    "forward": {
+      "left_ticks": 761,
+      "right_ticks": 683,
+      "left_errors": 0,
+      "right_errors": 0,
+      "duration": 5.00510311126709
+    },
+    "reverse": {
+      "left_ticks": 650,
+      "right_ticks": 502,
+      "left_errors": 0,
+      "right_errors": 0,
+      "duration": 5.002899169921875
+    }
+  },
+  "analysis": {
+    "left_diff_pct": 14.586070959264127,
+    "right_diff_pct": 26.500732064421666,
+    "avg_diff_pct": 20.543401511842895
+  }
+}

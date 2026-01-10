@@ -319,8 +319,9 @@ void updateControl(float dt) {
     }
   } else {
     // Direct wheel velocity control mode (legacy)
-    correctedTargetLeft = targetVelLeft;
-    correctedTargetRight = targetVelRight;
+    // Use ramped targets for smooth acceleration/deceleration
+    correctedTargetLeft = rampedTargetLeft;
+    correctedTargetRight = rampedTargetRight;
   }
 
   // Update PID controllers with corrected targets
