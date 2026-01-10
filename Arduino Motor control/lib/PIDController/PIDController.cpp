@@ -51,20 +51,17 @@ float PIDController::update(float measurement, float setpoint, float dt) {
     // 7. Combine all terms
     float output_raw = ff_term + p_term + i_term + d_term;
 
-    // 8. Apply deadband compensation OR force zero output for stop command
-    float output;
+    // 8. Apply deadband compensation
     if (setpoint > 0.001f) {
         output_raw += deadband_forward;
-        output = constrain(output_raw, output_min, output_max);
     } else if (setpoint < -0.001f) {
         output_raw -= deadband_reverse;
-        output = constrain(output_raw, output_min, output_max);
-    } else {
-        // When setpoint is zero (stop command), force PWM to zero
-        // PID-calculated braking might be below deadband and motors won't respond
-        // Direct zero is the most reliable way to ensure motors actually stop
-        output = 0.0f;
     }
+    // Note: When setpoint near zero, no deadband applied
+    // Velocity ramping ensures gradual approach to zero, so PID can track smoothly
+
+    // 9. Clamp to output limits
+    float output = constrain(output_raw, output_min, output_max);
 
     // 10. Back-calculation anti-windup
     if (output != output_raw && Ki > 0.0001f) {

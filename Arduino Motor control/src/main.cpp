@@ -62,6 +62,10 @@ PIDController pidRight;
 float targetVelLeft = 0;
 float targetVelRight = 0;
 
+// Ramped targets for smooth deceleration (m/s)
+float rampedTargetLeft = 0;
+float rampedTargetRight = 0;
+
 // Current velocities (m/s)
 float currentVelLeft = 0;
 float currentVelRight = 0;
@@ -73,6 +77,8 @@ int16_t pwmRight = 0;
 // cmd_vel targets (v, w)
 float target_v = 0;  // Linear velocity (m/s)
 float target_w = 0;  // Angular velocity (rad/s)
+float ramped_v = 0;  // Ramped linear velocity for smooth accel/decel
+float ramped_w = 0;  // Ramped angular velocity for smooth accel/decel
 bool use_cmd_vel = false;  // Use cmd_vel mode instead of direct wheel velocities
 
 // Heading hold gain (for angular velocity error correction)
@@ -97,6 +103,12 @@ const unsigned long ODOM_INTERVAL = 50;     // 50ms = 20Hz
 // Below this velocity, both motors stop to avoid unstable low-speed regime
 // Lowered to 0.08 m/s to allow SLAM target speeds (0.15-0.20 m/s)
 const float MIN_VELOCITY_THRESHOLD = 0.08f;  // m/s
+
+// Deceleration rate for smooth stopping (m/s²)
+// At 0.3 m/s, decel of 1.0 m/s² → 0.3 seconds to stop (gentle)
+// At 0.3 m/s, decel of 2.0 m/s² → 0.15 seconds to stop (moderate)
+// At 0.3 m/s, decel of 4.0 m/s² → 0.075 seconds to stop (aggressive)
+const float MAX_DECELERATION = 2.0f;  // m/s² - moderate deceleration for balance
 
 // SoftwareSerial for ESP32 communication
 SoftwareSerial softSerial(PIN_SOFT_RX, PIN_SOFT_TX);
@@ -134,6 +146,10 @@ void stopMotors() {
   targetVelRight = 0;
   target_v = 0;
   target_w = 0;
+  rampedTargetLeft = 0;
+  rampedTargetRight = 0;
+  ramped_v = 0;
+  ramped_w = 0;
   use_cmd_vel = false;
   setMotors(0, 0);
   pidLeft.reset();
@@ -208,25 +224,55 @@ void updateOdometry(float dt) {
 }
 
 // ============================================================
+// Velocity Ramping for Smooth Acceleration/Deceleration
+// ============================================================
+float rampVelocity(float current, float target, float dt) {
+  // Calculate maximum velocity change allowed in this timestep
+  float maxDelta = MAX_DECELERATION * dt;
+
+  // Calculate actual velocity difference
+  float delta = target - current;
+
+  // Clamp delta to maximum allowed change (preserves sign for direction)
+  if (delta > maxDelta) {
+    delta = maxDelta;
+  } else if (delta < -maxDelta) {
+    delta = -maxDelta;
+  }
+
+  // Return ramped velocity
+  return current + delta;
+}
+
+// ============================================================
 // PID Control Update
 // ============================================================
 void updateControl(float dt) {
   // Calculate velocities
   updateVelocities(dt);
 
+  // Apply velocity ramping to prevent abrupt changes
+  // This smooths both acceleration and deceleration
+  rampedTargetLeft = rampVelocity(rampedTargetLeft, targetVelLeft, dt);
+  rampedTargetRight = rampVelocity(rampedTargetRight, targetVelRight, dt);
+
   // Determine target wheel velocities
   float correctedTargetLeft, correctedTargetRight;
 
   if (use_cmd_vel) {
     // Using cmd_vel mode: (v, w) → wheel velocities with angular velocity feedback
-    // Calculate baseline wheel velocities from (v, w)
+    // First, ramp the cmd_vel targets for smooth accel/decel
+    ramped_v = rampVelocity(ramped_v, target_v, dt);
+    ramped_w = rampVelocity(ramped_w, target_w, dt);
+
+    // Calculate baseline wheel velocities from RAMPED (v, w)
     float wheelbase_half = WHEELBASE / 2.0f;
-    float baseTargetLeft = target_v - target_w * wheelbase_half;
-    float baseTargetRight = target_v + target_w * wheelbase_half;
+    float baseTargetLeft = ramped_v - ramped_w * wheelbase_half;
+    float baseTargetRight = ramped_v + ramped_w * wheelbase_half;
 
     // Only apply angular velocity feedback when commanded to move
     // When BOTH v=0 AND w=0 (full stop), don't apply corrections or motors won't stop
-    bool wantToMove = (abs(target_v) > 0.01f || abs(target_w) > 0.01f);
+    bool wantToMove = (abs(ramped_v) > 0.01f || abs(ramped_w) > 0.01f);
 
     // Declare variables outside block for debug printing
     float actual_w = 0.0f;
