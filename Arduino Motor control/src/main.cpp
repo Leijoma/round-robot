@@ -224,18 +224,33 @@ void updateControl(float dt) {
     float baseTargetLeft = target_v - target_w * wheelbase_half;
     float baseTargetRight = target_v + target_w * wheelbase_half;
 
-    // Calculate actual angular velocity from wheel velocities
-    float actual_w = (currentVelRight - currentVelLeft) / WHEELBASE;
+    // Only apply angular velocity feedback when commanded to move
+    // When BOTH v=0 AND w=0 (full stop), don't apply corrections or motors won't stop
+    bool wantToMove = (abs(target_v) > 0.01f || abs(target_w) > 0.01f);
 
-    // Calculate angular velocity error
-    float w_error = target_w - actual_w;
+    // Declare variables outside block for debug printing
+    float actual_w = 0.0f;
+    float w_error = 0.0f;
+    float correction = 0.0f;
 
-    // Apply angular velocity correction (convert angular error to linear velocity correction)
-    // This works for all cases: w=0 (heading hold), w>0 (turn right), w<0 (turn left)
-    float correction = headingHoldKp * w_error * wheelbase_half;
+    if (wantToMove) {
+      // Calculate actual angular velocity from wheel velocities
+      actual_w = (currentVelRight - currentVelLeft) / WHEELBASE;
 
-    correctedTargetLeft = baseTargetLeft - correction;
-    correctedTargetRight = baseTargetRight + correction;
+      // Calculate angular velocity error
+      w_error = target_w - actual_w;
+
+      // Apply angular velocity correction (convert angular error to linear velocity correction)
+      // This works for all cases: w=0 (heading hold), w>0 (turn right), w<0 (turn left)
+      correction = headingHoldKp * w_error * wheelbase_half;
+
+      correctedTargetLeft = baseTargetLeft - correction;
+      correctedTargetRight = baseTargetRight + correction;
+    } else {
+      // Full stop commanded (v=0 AND w=0): don't apply feedback corrections
+      correctedTargetLeft = baseTargetLeft;
+      correctedTargetRight = baseTargetRight;
+    }
 
     // DEBUG: Print cmd_vel status
     static unsigned long lastDebug = 0;
